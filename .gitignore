@@ -3,12 +3,19 @@
 
 # Compiled class file
 *.class
+/project/target/
+
+# Sbt
+.bsp
 
 # Log file
 *.log
 
 # BlueJ files
 *.ctxt
+
+# Idea
+.idea
 
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
@@ -18,7 +25,6 @@
 *.war
 *.nar
 *.ear
-*.zip
 *.tar.gz
 *.rar
 
@@ -26,3 +32,4 @@
 hs_err_pid*
 replay_pid*
 /target/
+
