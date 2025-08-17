@@ -7,13 +7,11 @@ import scala.util.Random
 
 trait BoidMessage
 final case class SendBoids(boids: List[ActorRef[BoidMessage]]) extends BoidMessage
-final case class UpdateVel(from: ActorRef[UpdatedVel]) extends BoidMessage
-final case class UpdatePos(from: ActorRef[UpdatedPos]) extends BoidMessage
-final case class UpdateView(from: ActorRef[UpdatedView]) extends BoidMessage
-final case class SendPos(pos: P2d) extends BoidMessage
-final case class SendVel(vel: V2d) extends BoidMessage
-final case class AskPos(from: ActorRef[SendPos]) extends BoidMessage
-final case class AskVel(from: ActorRef[SendVel]) extends BoidMessage
+final case class UpdateVel(from: ActorRef[ManagerMessage]) extends BoidMessage
+final case class UpdatePos(from: ActorRef[ManagerMessage]) extends BoidMessage
+final case class UpdateView(from: ActorRef[ManagerMessage]) extends BoidMessage
+final case class Send(pos: P2d, vel: V2d, from: ActorRef[BoidMessage]) extends BoidMessage
+final case class Ask(from: ActorRef[BoidMessage]) extends BoidMessage
 
 trait ManagerMessage
 final case class UpdatedVel() extends ManagerMessage
@@ -21,15 +19,29 @@ final case class UpdatedPos() extends ManagerMessage
 final case class UpdatedView() extends ManagerMessage
 
 val NumBoids = 10
+val PerceptionRadius = 50.0
+val AvoidRadius = 20.0
+val SeparationWeight = 1.0
+val AlignmentWeight = 1.0
+val CohesionWeight = 1.0
+val MaxSpeed = 4.0
+val EnvironmentWidth = 1000
+val EnvironmentHeight = 1000
+val MinX = -EnvironmentWidth / 2
+val MaxX = EnvironmentWidth / 2
+val MinY = -EnvironmentHeight / 2
+val MaxY = EnvironmentHeight / 2
 
 object BoidActor:
   def apply(manager: ActorRef[ManagerMessage]): Behavior[BoidMessage] =
     Behaviors.setup(context => new BoidActor().boidReceive)
 
-class BoidActor():
+class BoidActor:
   private var boids: List[ActorRef[BoidMessage]] = List.empty
   private var vel: V2d = V2d(Random.nextDouble(), Random.nextDouble())
   private var pos: P2d = P2d(Random.nextDouble(), Random.nextDouble())
+  private var nearbyBoids: Map[ActorRef[BoidMessage], (P2d, V2d)] = Map.empty
+  private var counter = 0
 
   val boidReceive: Behavior[BoidMessage] = Behaviors.receive: (context, message) =>
     message match
@@ -38,28 +50,104 @@ class BoidActor():
         Behaviors.same
       case UpdateVel(from) =>
         context.log.info(s"${context.self}: Updating vel, from $from")
-        updateVelocity()
-        from ! UpdatedVel()
-        Behaviors.same
+        nearbyBoids = Map.empty
+        boids.foreach(_ ! Ask(context.self))
+        getNearbyBoids(from)
       case UpdatePos(from) =>
         context.log.info(s"${context.self}: Updating pos, from $from")
         updatePosition()
         from ! UpdatedPos()
         Behaviors.same
-      case SendPos(pos) => ???
-      case SendVel(vel) => ???
-      case AskPos(from) =>
-        from ! SendPos(pos)
+      case Ask(from) =>
+        from ! Send(pos, vel, context.self)
         Behaviors.same
-      case AskVel(from) =>
-        from ! SendVel(vel)
-        Behaviors.same
-
-  def updateVelocity() = ???
-
-  def updatePosition() = ???
   
-  private def getNearbyBoids(): List[ActorRef[BoidMessage]] = ???
+  private val getNearbyBoids: ActorRef[ManagerMessage] => Behavior[BoidMessage] = from =>
+    Behaviors.receive: (context, message) =>
+      message match
+        case Send(otherPos, otherVel, otherBoid) =>
+          counter += 1
+          val distance = pos.distance(otherPos)
+          if distance < PerceptionRadius then
+            nearbyBoids += (otherBoid, (otherPos, otherVel))
+          if counter == NumBoids - 1 then
+            counter = 0
+            updateVelocity()
+            context.log.info(s"new vel: $vel")
+            from ! UpdatedVel()
+            boidReceive
+          else
+            Behaviors.same
+        case Ask(from) =>
+          from ! Send(pos, vel, context.self)
+          Behaviors.same
+
+  private def updateVelocity(): Unit =
+    val separation = calculateSeparation()
+    val alignment = calculateAlignment()
+    val cohesion = calculateCohesion()
+    vel = vel + (alignment * AlignmentWeight) + (separation * SeparationWeight) + (cohesion * CohesionWeight)
+    if vel.abs > MaxSpeed then
+      vel = vel.getNormalized * MaxSpeed
+
+  private def updatePosition(): Unit =
+    pos += vel
+    pos += (
+      pos match
+        case P2d(x, y) if x < MinX => V2d(EnvironmentWidth, 0)
+        case P2d(x, y) if x >= MaxX => V2d(-EnvironmentWidth, 0)
+        case P2d(x, y) if y < MinY => V2d(0, EnvironmentHeight)
+        case P2d(x, y) if y >= MaxY => V2d(0, -EnvironmentHeight)
+        case _ => V2d(0, 0)
+    )
+
+  private def calculateSeparation(): V2d =
+    var dx: Double = 0
+    var dy: Double = 0
+    var count = 0
+    nearbyBoids.foreach:
+      boid =>
+        val otherPos = boid._2._1
+        if pos.distance(otherPos) < AvoidRadius then
+          dx += pos.x - otherPos.x
+          dy += pos.y - otherPos.y
+          count += 1
+    if count > 0 then
+      dx /= count
+      dy /= count
+      V2d(dx, dy).getNormalized
+    else
+      V2d(0, 0)
+
+  private def calculateAlignment(): V2d =
+    var avgVx: Double = 0
+    var avgVy: Double = 0
+    if nearbyBoids.nonEmpty then
+      nearbyBoids.foreach:
+        boid =>
+          val otherVel = boid._2._2
+          avgVx += otherVel.x
+          avgVy += otherVel.y
+      avgVx /= nearbyBoids.size
+      avgVy /= nearbyBoids.size
+      V2d(avgVx - vel.x, avgVy - vel.y).getNormalized
+    else
+      V2d(0, 0)
+
+  private def calculateCohesion(): V2d =
+    var centerX: Double = 0
+    var centerY: Double = 0
+    if nearbyBoids.nonEmpty then
+      nearbyBoids.foreach:
+        boid =>
+          val otherPos = boid._2._1
+          centerX += otherPos.x
+          centerY += otherPos.y
+      centerX /= nearbyBoids.size
+      centerY /= nearbyBoids.size
+      V2d(centerX - pos.x, centerY - pos.y).getNormalized
+    else
+      V2d(0, 0)
 
 object ViewActor:
   def apply(): Behavior[BoidMessage] = Behaviors.receive: (context, message) =>
@@ -75,7 +163,7 @@ object BoidsManager:
       var boidActors: List[ActorRef[BoidMessage]] = List.empty
       for
         i <- 0 until NumBoids
-      yield boidActors = context.spawnAnonymous(BoidActor(context.self)) +: boidActors
+      yield boidActors +:= context.spawnAnonymous(BoidActor(context.self))
       boidActors.foreach:
         boid =>
           boid ! SendBoids(boidActors.filterNot(_ == boid))
