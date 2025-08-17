@@ -33,7 +33,7 @@ class EnteringPanel(frame: Frame) extends BorderPanel:
           ViewActor.createSimulationPanel()
           ViewActor.setPanel(ViewActor.simulationPanel)
           println("Starting simulation")
-          //controller.startSimulation(nBoids)
+          //boidManager ! Start(nBoids)
         else println("Illegal value inserted! Positive integer is requested.")
       catch case ex: NumberFormatException => println("Illegal value inserted! Integer is requested.")
   }

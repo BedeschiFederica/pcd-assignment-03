@@ -1,9 +1,12 @@
 package pcd.ass03
 
-import akka.actor.typed.Behavior
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 
 import scala.swing.*
+
+trait ViewMessage
+final case class UpdateView(from: ActorRef[ManagerMessage]) extends ViewMessage
 
 object ViewActor:
   private val width: Int = 1000
@@ -13,7 +16,7 @@ object ViewActor:
     title = "Boids Simulation"
     centerOnScreen()
 
-  def apply(): Behavior[BoidMessage] =
+  def apply(): Behavior[ViewMessage] =
     this.createSimulationPanel()
     Behaviors.receive: (context, message) =>
       message match

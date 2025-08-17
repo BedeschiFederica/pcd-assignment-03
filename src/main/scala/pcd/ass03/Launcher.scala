@@ -1,9 +1,9 @@
 package pcd.ass03
 
-import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorSystem, Behavior}
 
 object Configuration:
-  val NumBoids = 10
   val PerceptionRadius = 50.0
   val AvoidRadius = 20.0
   val SeparationWeight = 1.0
@@ -17,7 +17,14 @@ object Configuration:
   val MinY: Double = -EnvironmentHeight / 2
   val MaxY: Double = EnvironmentHeight / 2
 
+object MainActor:
+  def apply(): Behavior[Nothing] =
+    Behaviors.setup: context =>
+      val viewActor = context.spawn(ViewActor(), "view-actor")
+      context.spawn(BoidsManager(viewActor), "boids-manager")
+      Behaviors.empty
+
 object Launcher extends App:
-  val system: ActorSystem[ManagerMessage] = ActorSystem(BoidsManager(), name = "boid-manager")
+  private val system: ActorSystem[Nothing] = ActorSystem(MainActor(), name = "main-actor")
   Thread.sleep(5000)
   system.terminate()

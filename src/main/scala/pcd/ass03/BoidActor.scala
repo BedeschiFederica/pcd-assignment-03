@@ -1,7 +1,7 @@
 package pcd.ass03
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.actor.typed.{ActorRef, Behavior}
 
 import scala.util.Random
 
@@ -11,59 +11,56 @@ trait BoidMessage
 final case class SendBoids(boids: List[ActorRef[BoidMessage]]) extends BoidMessage
 final case class UpdateVel(from: ActorRef[ManagerMessage]) extends BoidMessage
 final case class UpdatePos(from: ActorRef[ManagerMessage]) extends BoidMessage
-final case class UpdateView(from: ActorRef[ManagerMessage]) extends BoidMessage
 final case class Send(pos: P2d, vel: V2d, from: ActorRef[BoidMessage]) extends BoidMessage
 final case class Ask(from: ActorRef[BoidMessage]) extends BoidMessage
 
 object BoidActor:
-  def apply(manager: ActorRef[ManagerMessage]): Behavior[BoidMessage] =
-    Behaviors.setup(context => new BoidActor().boidReceive)
+  def apply(manager: ActorRef[ManagerMessage], nBoids: Int): Behavior[BoidMessage] =
+    Behaviors.setup(context => new BoidActor(context, nBoids).boidReceive)
 
-  private class BoidActor:
+  private class BoidActor(ctx: ActorContext[BoidMessage], nBoids: Int):
     private var boids: List[ActorRef[BoidMessage]] = List.empty
     private var vel: V2d = V2d(Random.nextDouble(), Random.nextDouble())
     private var pos: P2d = P2d(Random.nextDouble(), Random.nextDouble())
     private var nearbyBoids: Map[ActorRef[BoidMessage], (P2d, V2d)] = Map.empty
     private var counter = 0
 
-    val boidReceive: Behavior[BoidMessage] = Behaviors.receive: (context, message) =>
-      message match
-        case SendBoids(boidsList) =>
-          boids = boidsList
-          Behaviors.same
-        case UpdateVel(from) =>
-          context.log.info(s"${context.self}: Updating vel, from $from")
-          nearbyBoids = Map.empty
-          boids.foreach(_ ! Ask(context.self))
-          getNearbyBoids(from)
-        case UpdatePos(from) =>
-          context.log.info(s"${context.self}: Updating pos, from $from")
-          updatePosition()
-          from ! UpdatedPos()
-          Behaviors.same
-        case Ask(from) =>
-          from ! Send(pos, vel, context.self)
-          Behaviors.same
+    val boidReceive: Behavior[BoidMessage] = Behaviors.receiveMessagePartial:
+      case SendBoids(boidsList) =>
+        boids = boidsList
+        Behaviors.same
+      case UpdateVel(from) =>
+        ctx.log.info(s"${ctx.self}: Updating vel, from $from")
+        nearbyBoids = Map.empty
+        boids.foreach(_ ! Ask(ctx.self))
+        getNearbyBoids(from)
+      case UpdatePos(from) =>
+        ctx.log.info(s"${ctx.self}: Updating pos, from $from")
+        updatePosition()
+        from ! UpdatedPos()
+        Behaviors.same
+      case Ask(from) =>
+        from ! Send(pos, vel, ctx.self)
+        Behaviors.same
 
     private val getNearbyBoids: ActorRef[ManagerMessage] => Behavior[BoidMessage] = from =>
-      Behaviors.receive: (context, message) =>
-        message match
-          case Send(otherPos, otherVel, otherBoid) =>
-            counter += 1
-            val distance = pos.distance(otherPos)
-            if distance < PerceptionRadius then
-              nearbyBoids += (otherBoid, (otherPos, otherVel))
-            if counter == NumBoids - 1 then
-              counter = 0
-              updateVelocity()
-              context.log.info(s"new vel: $vel")
-              from ! UpdatedVel()
-              boidReceive
-            else
-              Behaviors.same
-          case Ask(from) =>
-            from ! Send(pos, vel, context.self)
+      Behaviors.receiveMessagePartial:
+        case Send(otherPos, otherVel, otherBoid) =>
+          counter += 1
+          val distance = pos.distance(otherPos)
+          if distance < PerceptionRadius then
+            nearbyBoids += (otherBoid, (otherPos, otherVel))
+          if counter == nBoids - 1 then
+            counter = 0
+            updateVelocity()
+            ctx.log.info(s"new vel: $vel")
+            from ! UpdatedVel()
+            boidReceive
+          else
             Behaviors.same
+        case Ask(from) =>
+          from ! Send(pos, vel, ctx.self)
+          Behaviors.same
 
     private def updateVelocity(): Unit =
       val separation = calculateSeparation()
