@@ -32,6 +32,7 @@ object DrawerActor:
     Behaviors.receivePartial:
       (context, message) => message match
         case DrawBoids() =>
+          //context.log.info("Drawing")
           boidsPosition = List.empty
           boids.foreach(_ ! Ask(context.self))
           waitingPositions(manager)

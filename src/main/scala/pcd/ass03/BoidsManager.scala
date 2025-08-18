@@ -11,6 +11,8 @@ final case class UpdatedPos() extends ManagerMessage
 final case class UpdatedView() extends ManagerMessage
 final case class Start(nBoids: Int) extends ManagerMessage
 final case class StopSimulation() extends ManagerMessage
+final case class SuspendSimulation() extends ManagerMessage
+final case class ResumeSimulation() extends ManagerMessage
 
 object BoidsManager:
   def apply(viewActor: ActorRef[ViewMessage]): Behavior[ManagerMessage] = Behaviors.setup: context =>
@@ -55,6 +57,16 @@ object BoidsManager:
           else
             Behaviors.same
         case StopSimulation() => stopSimulation()
+        case SuspendSimulation() => suspend(waitingVel, UpdatedVel())
+
+    private val suspend: (Behavior[ManagerMessage], ManagerMessage) => Behavior[ManagerMessage] = (oldState, message) =>
+      Behaviors.withStash[ManagerMessage](nBoids): stash =>
+        Behaviors.receiveMessagePartial:
+          case ResumeSimulation() => stash.unstashAll(oldState)
+          case StopSimulation() => stopSimulation()
+          case message =>
+            stash.stash(message)
+            Behaviors.same
 
     private val waitingPos: Behavior[ManagerMessage] =
       Behaviors.receiveMessagePartial:
@@ -68,6 +80,7 @@ object BoidsManager:
           else
             Behaviors.same
         case StopSimulation() => stopSimulation()
+        case SuspendSimulation() => suspend(waitingPos, UpdatedPos())
 
     private val waitingView: Behavior[ManagerMessage] =
       Behaviors.receiveMessagePartial:
@@ -76,8 +89,9 @@ object BoidsManager:
           boids.foreach(_ ! UpdateVel(ctx.self))
           waitingVel
         case StopSimulation() => stopSimulation()
+        case SuspendSimulation() => suspend(waitingView, UpdatedView())
 
     private def stopSimulation(): Behavior[ManagerMessage] =
-      ctx.log.info(s"other STOP $this ${ctx.self}")
+      ctx.log.info(s"STOP")
       boids.foreach(ctx.stop)
       initialBehavior(viewActor, this)

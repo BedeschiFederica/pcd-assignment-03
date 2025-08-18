@@ -13,7 +13,7 @@ final case class SendManager(manager: ActorRef[ManagerMessage]) extends ViewMess
 final case class UpdateView(from: ActorRef[ManagerMessage]) extends ViewMessage
 final case class InitDrawer(boids: List[ActorRef[BoidMessage]]) extends ViewMessage
 final case class Stop() extends ViewMessage
-final case class Suspend() extends ViewMessage
+final case class SuspendResume() extends ViewMessage
 
 object ViewActor:
   private var managerActor: Option[ActorRef[ManagerMessage]] = Option.empty
@@ -40,12 +40,13 @@ object ViewActor:
         case SendManager(manager) =>
           managerActor = Some(manager)
           enteringPanelActor = Some(context.spawnAnonymous(EnteringPanelActor(manager, frame)))
+          addListeners(context)
           Behaviors.same
         case InitDrawer(boids) =>
+          suspendResumeButton.text = "Suspend"
           drawerActor = Some(context.spawnAnonymous(DrawerActor(managerActor, boids, width, height)))
           boidsPanel = Some(DrawerActor.panel())
           createSimulationPanel()
-          addListeners(context)
           Behaviors.same
         case UpdateView(from) =>
           //context.log.info(s"${context.self}: Updating view, from $from")
@@ -56,6 +57,15 @@ object ViewActor:
           context.stop(drawerActor.get)
           enteringPanelActor = Some(context.spawnAnonymous(EnteringPanelActor(managerActor.get, frame)))
           managerActor.get ! StopSimulation()
+          Behaviors.same
+        case SuspendResume() =>
+          suspendResumeButton.text = suspendResumeButton.text match
+            case "Suspend" =>
+              managerActor.get ! SuspendSimulation()
+              "Resume"
+            case _ =>
+              managerActor.get ! ResumeSimulation()
+              "Suspend"
           Behaviors.same
 
   private def createSimulationPanel(): Unit =
@@ -103,16 +113,14 @@ object ViewActor:
           case _ => throw IllegalStateException("Future unsuccessful.")
         }
     }
-    /*suspendResumeButton.addActionListener((e: ActionEvent) => {
-      if (suspendResumeButton.getText == "Suspend") {
-        suspendResumeButton.setText("Resume")
-        this.controller.suspendSimulation()
-      }
-      else {
-        suspendResumeButton.setText("Suspend")
-        this.controller.resumeSimulation()
-      }
-    })*/
+    suspendResumeButton.listenTo(suspendResumeButton.mouse.clicks)
+    suspendResumeButton.reactions += {
+      case _: ButtonClicked =>
+        context.pipeToSelf(Future.unit) {
+          case Success(_) => SuspendResume()
+          case _ => throw IllegalStateException("Future unsuccessful.")
+        }
+    }
 
   /*override def stateChanged(e: ChangeEvent): Unit =
     var `val`: Int = 0
