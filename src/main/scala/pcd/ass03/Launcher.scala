@@ -2,6 +2,7 @@ package pcd.ass03
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior}
+import com.typesafe.config.ConfigFactory
 
 object Configuration:
   val PerceptionRadius = 50.0
@@ -26,6 +27,20 @@ object MainActor:
       Behaviors.empty
 
 object Launcher extends App:
-  private val system: ActorSystem[Nothing] = ActorSystem(MainActor(), name = "main-actor")
+  private val blockingScheduler =
+    """
+      |my-blocking-dispatcher {
+      |  type = Dispatcher
+      |  executor = "thread-pool-executor"
+      |  thread-pool-executor {
+      |    fixed-pool-size = 16
+      |  }
+      |  throughput = 1
+      |}
+      |""".stripMargin
+  private val myConfig = ConfigFactory.parseString(blockingScheduler)
+  private val regularConfig = ConfigFactory.load()
+  val combined = myConfig.withFallback(regularConfig)
+  private val system: ActorSystem[Nothing] = ActorSystem(MainActor(), "main-actor", myConfig)
   /*Thread.sleep(5000)
   system.terminate()*/
