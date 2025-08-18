@@ -22,8 +22,10 @@ object BoidActor:
 
   private class BoidActor(ctx: ActorContext[BoidMessage], nBoids: Int):
     private var boids: List[ActorRef[BoidMessage]] = List.empty
-    private var vel: V2d = V2d(Random.nextDouble(), Random.nextDouble())
-    private var pos: P2d = P2d(Random.nextDouble(), Random.nextDouble())
+    private var vel: V2d = V2d(Random.nextDouble() * MaxSpeed / 2 - MaxSpeed / 4,
+      Random.nextDouble() * MaxSpeed / 2 - MaxSpeed / 4)
+    private var pos: P2d = P2d(-EnvironmentWidth / 2 + Random.nextDouble() * EnvironmentWidth,
+      -EnvironmentHeight / 2 + Random.nextDouble() * EnvironmentHeight)
     private var nearbyBoids: Map[ActorRef[BoidDrawMessage], (P2d, V2d)] = Map.empty
     private var counter = 0
 
@@ -32,12 +34,12 @@ object BoidActor:
         boids = boidsList
         Behaviors.same
       case UpdateVel(from) =>
-        ctx.log.info(s"${ctx.self}: Updating vel, from $from")
+        //ctx.log.info(s"${ctx.self}: Updating vel, from $from")
         nearbyBoids = Map.empty
         boids.foreach(_ ! Ask(ctx.self))
         getNearbyBoids(from)
       case UpdatePos(from) =>
-        ctx.log.info(s"${ctx.self}: Updating pos, from $from")
+        //ctx.log.info(s"${ctx.self}: Updating pos, from $from")
         updatePosition()
         from ! UpdatedPos()
         Behaviors.same
@@ -55,7 +57,6 @@ object BoidActor:
           if counter == nBoids - 1 then
             counter = 0
             updateVelocity()
-            ctx.log.info(s"new vel: $vel")
             from ! UpdatedVel()
             boidReceive
           else

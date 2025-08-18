@@ -1,17 +1,23 @@
 package pcd.ass03
 
 import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 
+import scala.concurrent.Future
 import scala.swing.*
+import scala.swing.event.ButtonClicked
+import scala.util.Success
 
 trait ViewMessage
 final case class SendManager(manager: ActorRef[ManagerMessage]) extends ViewMessage
 final case class UpdateView(from: ActorRef[ManagerMessage]) extends ViewMessage
 final case class InitDrawer(boids: List[ActorRef[BoidMessage]]) extends ViewMessage
+final case class Stop() extends ViewMessage
+final case class Suspend() extends ViewMessage
 
 object ViewActor:
   private var managerActor: Option[ActorRef[ManagerMessage]] = Option.empty
+  private var enteringPanelActor: Option[ActorRef[Click]] = Option.empty
   private var drawerActor: Option[ActorRef[DrawMessage]] = Option.empty
 
   private val width: Int = 1000
@@ -25,22 +31,31 @@ object ViewActor:
   private val cohesionSlider = makeSlider
   private val separationSlider = makeSlider
   private val alignmentSlider = makeSlider
+  private val stopButton = new Button("Stop")
+  private val suspendResumeButton = new Button("Suspend")
 
   def apply(): Behavior[ViewMessage] =
     Behaviors.receive: (context, message) =>
       message match
         case SendManager(manager) =>
           managerActor = Some(manager)
-          context.spawnAnonymous(EnteringPanelActor(manager, frame))
+          enteringPanelActor = Some(context.spawnAnonymous(EnteringPanelActor(manager, frame)))
           Behaviors.same
         case InitDrawer(boids) =>
           drawerActor = Some(context.spawnAnonymous(DrawerActor(managerActor, boids, width, height)))
           boidsPanel = Some(DrawerActor.panel())
           createSimulationPanel()
+          addListeners(context)
           Behaviors.same
         case UpdateView(from) =>
-          context.log.info(s"${context.self}: Updating view, from $from")
+          //context.log.info(s"${context.self}: Updating view, from $from")
           drawerActor.get ! DrawBoids()
+          Behaviors.same
+        case Stop() =>
+          context.stop(enteringPanelActor.get)
+          context.stop(drawerActor.get)
+          enteringPanelActor = Some(context.spawnAnonymous(EnteringPanelActor(managerActor.get, frame)))
+          managerActor.get ! StopSimulation()
           Behaviors.same
 
   private def createSimulationPanel(): Unit =
@@ -54,22 +69,6 @@ object ViewActor:
 
   private def createButtonsPanel: FlowPanel = {
     val buttonsPanel = new FlowPanel()
-    val stopButton = new Button("Stop")
-    /*stopButton.addActionListener((e: ActionEvent) => {
-      this.enteringPanel = new EnteringPanel(this, this.controller, this.frame)
-      this.controller.stopSimulation()
-    })*/
-    val suspendResumeButton = new Button("Suspend")
-    /*suspendResumeButton.addActionListener((e: ActionEvent) => {
-      if (suspendResumeButton.getText == "Suspend") {
-        suspendResumeButton.setText("Resume")
-        this.controller.suspendSimulation()
-      }
-      else {
-        suspendResumeButton.setText("Suspend")
-        this.controller.resumeSimulation()
-      }
-    })*/
     buttonsPanel.contents ++= List(stopButton, suspendResumeButton)
     buttonsPanel
   }
@@ -95,9 +94,25 @@ object ViewActor:
       labels = Map(0 -> Label("0"), 10 -> Label("1"), 20 -> Label("2"))
       //slider.addChangeListener(this)
 
-  /*def update(frameRate: Int): Unit =
-    boidsPanel.frameRate = frameRate
-    boidsPanel.repaint()*/
+  private def addListeners(context: ActorContext[ViewMessage]): Unit =
+    stopButton.listenTo(stopButton.mouse.clicks)
+    stopButton.reactions += {
+      case _: ButtonClicked =>
+        context.pipeToSelf(Future.unit) {
+          case Success(_) => Stop()
+          case _ => throw IllegalStateException("Future unsuccessful.")
+        }
+    }
+    /*suspendResumeButton.addActionListener((e: ActionEvent) => {
+      if (suspendResumeButton.getText == "Suspend") {
+        suspendResumeButton.setText("Resume")
+        this.controller.suspendSimulation()
+      }
+      else {
+        suspendResumeButton.setText("Suspend")
+        this.controller.resumeSimulation()
+      }
+    })*/
 
   /*override def stateChanged(e: ChangeEvent): Unit =
     var `val`: Int = 0
