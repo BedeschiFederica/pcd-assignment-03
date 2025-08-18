@@ -16,14 +16,15 @@ object BoidsManager:
     (context, message) => message match
       case Start(nBoids) =>
         var boidActors: List[ActorRef[BoidMessage]] = List.empty
-          for
-            i <- 0 until nBoids
-          yield boidActors +:= context.spawnAnonymous(BoidActor(context.self, nBoids))
-          boidActors.foreach:
-            boid =>
-              boid ! SendBoids(boidActors.filterNot(_ == boid))
-              boid ! UpdateVel(context.self)
-          new BoidsManager(context, viewActor, boidActors, nBoids).waitingVel
+        for
+          i <- 0 until nBoids
+        yield boidActors +:= context.spawnAnonymous(BoidActor(context.self, nBoids))
+        viewActor ! InitDrawer(boidActors)
+        boidActors.foreach:
+          boid =>
+            boid ! SendBoids(boidActors.filterNot(_ == boid))
+            boid ! UpdateVel(context.self)
+        new BoidsManager(context, viewActor, boidActors, nBoids).waitingVel
 
   private class BoidsManager(ctx: ActorContext[ManagerMessage], viewActor: ActorRef[ViewMessage],
                              boids: List[ActorRef[BoidMessage]], nBoids: Int):

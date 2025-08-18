@@ -21,10 +21,11 @@ object MainActor:
   def apply(): Behavior[Nothing] =
     Behaviors.setup: context =>
       val viewActor = context.spawn(ViewActor(), "view-actor")
-      context.spawn(BoidsManager(viewActor), "boids-manager")
+      val boidsManager = context.spawn(BoidsManager(viewActor), "boids-manager")
+      viewActor ! SendManager(boidsManager)
       Behaviors.empty
 
 object Launcher extends App:
   private val system: ActorSystem[Nothing] = ActorSystem(MainActor(), name = "main-actor")
-  Thread.sleep(5000)
-  system.terminate()
+  /*Thread.sleep(5000)
+  system.terminate()*/

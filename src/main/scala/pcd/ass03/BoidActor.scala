@@ -11,8 +11,10 @@ trait BoidMessage
 final case class SendBoids(boids: List[ActorRef[BoidMessage]]) extends BoidMessage
 final case class UpdateVel(from: ActorRef[ManagerMessage]) extends BoidMessage
 final case class UpdatePos(from: ActorRef[ManagerMessage]) extends BoidMessage
-final case class Send(pos: P2d, vel: V2d, from: ActorRef[BoidMessage]) extends BoidMessage
-final case class Ask(from: ActorRef[BoidMessage]) extends BoidMessage
+
+trait BoidDrawMessage extends BoidMessage with DrawMessage
+final case class Send(pos: P2d, vel: V2d, from: ActorRef[BoidDrawMessage]) extends BoidDrawMessage
+final case class Ask(from: ActorRef[BoidDrawMessage]) extends BoidDrawMessage
 
 object BoidActor:
   def apply(manager: ActorRef[ManagerMessage], nBoids: Int): Behavior[BoidMessage] =
@@ -22,7 +24,7 @@ object BoidActor:
     private var boids: List[ActorRef[BoidMessage]] = List.empty
     private var vel: V2d = V2d(Random.nextDouble(), Random.nextDouble())
     private var pos: P2d = P2d(Random.nextDouble(), Random.nextDouble())
-    private var nearbyBoids: Map[ActorRef[BoidMessage], (P2d, V2d)] = Map.empty
+    private var nearbyBoids: Map[ActorRef[BoidDrawMessage], (P2d, V2d)] = Map.empty
     private var counter = 0
 
     val boidReceive: Behavior[BoidMessage] = Behaviors.receiveMessagePartial:

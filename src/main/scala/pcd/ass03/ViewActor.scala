@@ -6,40 +6,51 @@ import akka.actor.typed.scaladsl.Behaviors
 import scala.swing.*
 
 trait ViewMessage
+final case class SendManager(manager: ActorRef[ManagerMessage]) extends ViewMessage
 final case class UpdateView(from: ActorRef[ManagerMessage]) extends ViewMessage
+final case class InitDrawer(boids: List[ActorRef[BoidMessage]]) extends ViewMessage
 
 object ViewActor:
+  private var managerActor: Option[ActorRef[ManagerMessage]] = Option.empty
+  private var drawerActor: Option[ActorRef[DrawMessage]] = Option.empty
+
   private val width: Int = 1000
   private val height: Int = 800
 
   private val frame: Frame = new MainFrame:
     title = "Boids Simulation"
     centerOnScreen()
-
-  def apply(): Behavior[ViewMessage] =
-    this.createSimulationPanel()
-    Behaviors.receive: (context, message) =>
-      message match
-        case UpdateView(from) =>
-          context.log.info(s"${context.self}: Updating view, from $from")
-          from ! UpdatedView()
-          Behaviors.same
-
-  private val _simulationPanel = new BorderPanel()
-  private val boidsPanel = BoidsPanel(width, height)
-  private val enteringPanel = EnteringPanel(frame)
+  private val simulationPanel = new BorderPanel()
+  private var boidsPanel: Option[FlowPanel] = Option.empty
   private val cohesionSlider = makeSlider
   private val separationSlider = makeSlider
   private val alignmentSlider = makeSlider
 
-  def createSimulationPanel(): Unit =
+  def apply(): Behavior[ViewMessage] =
+    Behaviors.receive: (context, message) =>
+      message match
+        case SendManager(manager) =>
+          managerActor = Some(manager)
+          context.spawnAnonymous(EnteringPanelActor(manager, frame))
+          Behaviors.same
+        case InitDrawer(boids) =>
+          drawerActor = Some(context.spawnAnonymous(DrawerActor(managerActor, boids, width, height)))
+          boidsPanel = Some(DrawerActor.panel())
+          createSimulationPanel()
+          Behaviors.same
+        case UpdateView(from) =>
+          context.log.info(s"${context.self}: Updating view, from $from")
+          drawerActor.get ! DrawBoids()
+          Behaviors.same
+
+  private def createSimulationPanel(): Unit =
     val slidersPanel = new FlowPanel()
     slidersPanel.contents ++= List(new Label("Separation"), separationSlider, Label("Alignment"), alignmentSlider,
       Label("Cohesion"), cohesionSlider)
     val buttonsPanel = createButtonsPanel
     simulationPanel.layout ++= List((buttonsPanel, BorderPanel.Position.North),
-      (boidsPanel, BorderPanel.Position.Center), (slidersPanel, BorderPanel.Position.South))
-    //boidsPanel = new BoidsPanel(this, controller)
+      (boidsPanel.get, BorderPanel.Position.Center), (slidersPanel, BorderPanel.Position.South))
+    setPanel(simulationPanel)
 
   private def createButtonsPanel: FlowPanel = {
     val buttonsPanel = new FlowPanel()
@@ -63,7 +74,7 @@ object ViewActor:
     buttonsPanel
   }
 
-  def setPanel(panel: Panel): Unit =
+  private def setPanel(panel: Panel): Unit =
     frame.peer.getContentPane.removeAll()
     frame.contents = panel
     frame.peer.revalidate()
@@ -84,9 +95,9 @@ object ViewActor:
       labels = Map(0 -> Label("0"), 10 -> Label("1"), 20 -> Label("2"))
       //slider.addChangeListener(this)
 
-  def update(frameRate: Int): Unit =
+  /*def update(frameRate: Int): Unit =
     boidsPanel.frameRate = frameRate
-    boidsPanel.repaint()
+    boidsPanel.repaint()*/
 
   /*override def stateChanged(e: ChangeEvent): Unit =
     var `val`: Int = 0
@@ -102,5 +113,3 @@ object ViewActor:
       `val` = this.alignmentSlider.getValue
       this.controller.setAlignmentWeight(0.1 * `val`)
     }*/
-
-  def simulationPanel: BorderPanel = _simulationPanel
