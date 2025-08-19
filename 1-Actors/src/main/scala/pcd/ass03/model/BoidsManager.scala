@@ -2,7 +2,6 @@ package pcd.ass03.model
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
-import pcd.ass03.*
 import pcd.ass03.view.{InitDrawer, UpdateView, ViewMessage}
 
 trait ManagerMessage

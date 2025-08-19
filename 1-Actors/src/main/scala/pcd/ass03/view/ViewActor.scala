@@ -3,7 +3,6 @@ package pcd.ass03.view
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass03.model.*
-import pcd.ass03.*
 
 import scala.concurrent.Future
 import scala.swing.*
