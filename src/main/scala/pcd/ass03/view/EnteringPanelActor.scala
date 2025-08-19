@@ -1,7 +1,8 @@
-package pcd.ass03
+package pcd.ass03.view
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
+import pcd.ass03.model.{ManagerMessage, Start}
 
 import scala.concurrent.Future
 import scala.swing.*

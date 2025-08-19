@@ -1,4 +1,4 @@
-package pcd.ass03
+package pcd.ass03.model
 
 import scala.annotation.targetName
 

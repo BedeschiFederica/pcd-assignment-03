@@ -3,6 +3,8 @@ package pcd.ass03
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior}
 import com.typesafe.config.ConfigFactory
+import pcd.ass03.model.BoidsManager
+import pcd.ass03.view.{SendManager, ViewActor}
 
 object Configuration:
   val PerceptionRadius = 50.0

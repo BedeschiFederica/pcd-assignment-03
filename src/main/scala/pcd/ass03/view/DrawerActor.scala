@@ -1,12 +1,14 @@
-package pcd.ass03
+package pcd.ass03.view
 
-import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector}
+import pcd.ass03.model.*
+import pcd.ass03.Configuration
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Success
-import scala.swing.{FlowPanel, Graphics2D}
 import java.awt.Color
+import scala.concurrent.{ExecutionContext, Future}
+import scala.swing.{FlowPanel, Graphics2D}
+import scala.util.Success
 
 trait DrawMessage
 final case class DrawBoids() extends DrawMessage

@@ -1,11 +1,12 @@
-package pcd.ass03
+package pcd.ass03.model
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
+import pcd.ass03.Configuration.*
+import pcd.ass03.*
+import pcd.ass03.view.DrawMessage
 
 import scala.util.Random
-
-import Configuration.*
 
 trait BoidMessage
 final case class SendBoids(boids: List[ActorRef[BoidMessage]]) extends BoidMessage
