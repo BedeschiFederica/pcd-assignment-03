@@ -11,6 +11,7 @@ trait BoidMessage
 final case class SendBoids(boids: List[ActorRef[BoidMessage]]) extends BoidMessage
 final case class UpdateVel(from: ActorRef[ManagerMessage]) extends BoidMessage
 final case class UpdatePos(from: ActorRef[ManagerMessage]) extends BoidMessage
+final case class UpdateWeights(separation: Double, alignment: Double, cohesion: Double) extends BoidMessage
 
 trait BoidDrawMessage extends BoidMessage with DrawMessage
 final case class Send(pos: P2d, vel: V2d, from: ActorRef[BoidDrawMessage]) extends BoidDrawMessage
@@ -26,6 +27,9 @@ object BoidActor:
       Random.nextDouble() * MaxSpeed / 2 - MaxSpeed / 4)
     private var pos: P2d = P2d(-EnvironmentWidth / 2 + Random.nextDouble() * EnvironmentWidth,
       -EnvironmentHeight / 2 + Random.nextDouble() * EnvironmentHeight)
+    private var separationWeight: Double = SeparationWeight
+    private var alignmentWeight: Double = AlignmentWeight
+    private var cohesionWeight: Double = CohesionWeight
     private var nearbyBoids: Map[ActorRef[BoidDrawMessage], (P2d, V2d)] = Map.empty
     private var counter = 0
 
@@ -46,6 +50,11 @@ object BoidActor:
       case Ask(from) =>
         from ! Send(pos, vel, ctx.self)
         Behaviors.same
+      case UpdateWeights(separation, alignment, cohesion) =>
+        separationWeight = separation
+        alignmentWeight = alignment
+        cohesionWeight = cohesion
+        Behaviors.same
 
     private val getNearbyBoids: ActorRef[ManagerMessage] => Behavior[BoidMessage] = from =>
       Behaviors.receiveMessagePartial:
@@ -64,12 +73,17 @@ object BoidActor:
         case Ask(from) =>
           from ! Send(pos, vel, ctx.self)
           Behaviors.same
+        case UpdateWeights(separation, alignment, cohesion) =>
+          separationWeight = separation
+          alignmentWeight = alignment
+          cohesionWeight = cohesion
+          Behaviors.same
 
     private def updateVelocity(): Unit =
       val separation = calculateSeparation()
       val alignment = calculateAlignment()
       val cohesion = calculateCohesion()
-      vel = vel + (alignment * AlignmentWeight) + (separation * SeparationWeight) + (cohesion * CohesionWeight)
+      vel = vel + (alignment * alignmentWeight) + (separation * separationWeight) + (cohesion * cohesionWeight)
       if vel.abs > MaxSpeed then
         vel = vel.getNormalized * MaxSpeed
 

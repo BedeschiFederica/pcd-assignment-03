@@ -5,7 +5,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 
 import scala.concurrent.Future
 import scala.swing.*
-import scala.swing.event.ButtonClicked
+import scala.swing.event.{ButtonClicked, ValueChanged}
 import scala.util.Success
 
 trait ViewMessage
@@ -44,6 +44,7 @@ object ViewActor:
           Behaviors.same
         case InitDrawer(boids) =>
           suspendResumeButton.text = "Suspend"
+          Set(separationSlider, alignmentSlider, cohesionSlider).foreach(_.value = 10)
           drawerActor = Some(context.spawnAnonymous(DrawerActor(managerActor, boids, width, height)))
           boidsPanel = Some(DrawerActor.panel())
           createSimulationPanel()
@@ -72,6 +73,7 @@ object ViewActor:
     val slidersPanel = new FlowPanel()
     slidersPanel.contents ++= List(new Label("Separation"), separationSlider, Label("Alignment"), alignmentSlider,
       Label("Cohesion"), cohesionSlider)
+    slidersPanel.listenTo(separationSlider, alignmentSlider, cohesionSlider)
     val buttonsPanel = createButtonsPanel
     simulationPanel.layout ++= List((buttonsPanel, BorderPanel.Position.North),
       (boidsPanel.get, BorderPanel.Position.Center), (slidersPanel, BorderPanel.Position.South))
@@ -102,7 +104,6 @@ object ViewActor:
       paintTicks = true
       paintLabels = true
       labels = Map(0 -> Label("0"), 10 -> Label("1"), 20 -> Label("2"))
-      //slider.addChangeListener(this)
 
   private def addListeners(context: ActorContext[ViewMessage]): Unit =
     stopButton.listenTo(stopButton.mouse.clicks)
@@ -121,18 +122,10 @@ object ViewActor:
           case _ => throw IllegalStateException("Future unsuccessful.")
         }
     }
+    Set(separationSlider, alignmentSlider, cohesionSlider).foreach(addSliderListener)
 
-  /*override def stateChanged(e: ChangeEvent): Unit =
-    var `val`: Int = 0
-    if (e.getSource eq this.separationSlider) {
-      `val` = this.separationSlider.getValue
-      this.controller.setSeparationWeight(0.1 * `val`)
+  private def addSliderListener(slider: Slider): Unit =
+    slider.reactions += {
+      case _: ValueChanged => managerActor.get ! ChangeWeights(separationSlider.value * 0.1, alignmentSlider.value * 0.1,
+        cohesionSlider.value * 0.1)
     }
-    else if (e.getSource eq this.cohesionSlider) {
-      `val` = this.cohesionSlider.getValue
-      this.controller.setCohesionWeight(0.1 * `val`)
-    }
-    else {
-      `val` = this.alignmentSlider.getValue
-      this.controller.setAlignmentWeight(0.1 * `val`)
-    }*/

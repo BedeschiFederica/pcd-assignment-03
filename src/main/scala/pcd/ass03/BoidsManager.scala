@@ -13,6 +13,7 @@ final case class Start(nBoids: Int) extends ManagerMessage
 final case class StopSimulation() extends ManagerMessage
 final case class SuspendSimulation() extends ManagerMessage
 final case class ResumeSimulation() extends ManagerMessage
+final case class ChangeWeights(separation: Double, alignment: Double, cohesion: Double) extends ManagerMessage
 
 object BoidsManager:
   def apply(viewActor: ActorRef[ViewMessage]): Behavior[ManagerMessage] = Behaviors.setup: context =>
@@ -58,6 +59,9 @@ object BoidsManager:
             Behaviors.same
         case StopSimulation() => stopSimulation()
         case SuspendSimulation() => suspend(waitingVel, UpdatedVel())
+        case ChangeWeights(separation, alignment, cohesion) =>
+          boids.foreach(_ ! UpdateWeights(separation, alignment, cohesion))
+          Behaviors.same
 
     private val suspend: (Behavior[ManagerMessage], ManagerMessage) => Behavior[ManagerMessage] = (oldState, message) =>
       Behaviors.withStash[ManagerMessage](nBoids): stash =>
@@ -81,6 +85,9 @@ object BoidsManager:
             Behaviors.same
         case StopSimulation() => stopSimulation()
         case SuspendSimulation() => suspend(waitingPos, UpdatedPos())
+        case ChangeWeights(separation, alignment, cohesion) =>
+          boids.foreach(_ ! UpdateWeights(separation, alignment, cohesion))
+          Behaviors.same
 
     private val waitingView: Behavior[ManagerMessage] =
       Behaviors.receiveMessagePartial:
@@ -90,6 +97,9 @@ object BoidsManager:
           waitingVel
         case StopSimulation() => stopSimulation()
         case SuspendSimulation() => suspend(waitingView, UpdatedView())
+        case ChangeWeights(separation, alignment, cohesion) =>
+          boids.foreach(_ ! UpdateWeights(separation, alignment, cohesion))
+          Behaviors.same
 
     private def stopSimulation(): Behavior[ManagerMessage] =
       ctx.log.info(s"STOP")
