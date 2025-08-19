@@ -23,16 +23,14 @@ object BoidsManager:
     (viewActor, manager) => Behaviors.receivePartial:
       (context, message) => message match
         case Start(nBoids) =>
-          context.log.info("START")
           var boidActors: List[ActorRef[BoidMessage]] = List.empty
           for
             i <- 0 until nBoids
           yield boidActors +:= context.spawnAnonymous(BoidActor(context.self, nBoids))
           viewActor ! InitDrawer(boidActors)
-          boidActors.foreach:
-            boid =>
-              boid ! SendBoids(boidActors.filterNot(_ == boid))
-              boid ! UpdateVel(context.self)
+          boidActors.foreach: boid =>
+            boid ! SendBoids(boidActors.filterNot(_ == boid))
+            boid ! UpdateVel(context.self)
           manager.boids = boidActors
           manager.waitingVel
         case _ => Behaviors.same
@@ -47,24 +45,38 @@ object BoidsManager:
     private def nBoids: Int = _boids.size
 
     val waitingVel: Behavior[ManagerMessage] =
-      Behaviors.receiveMessagePartial:
+      Behaviors.receiveMessage:
         case UpdatedVel() =>
           counter += 1
-          //ctx.log.info(s"BoidActor #$counter has updated velocity")
           if counter == nBoids then
             counter = 0
             boids.foreach(_ ! UpdatePos(ctx.self))
             waitingPos
           else
             Behaviors.same
-        case StopSimulation() => stopSimulation()
-        case SuspendSimulation() => suspend(waitingVel, UpdatedVel())
-        case ChangeWeights(separation, alignment, cohesion) =>
-          boids.foreach(_ ! UpdateWeights(separation, alignment, cohesion))
-          Behaviors.same
+        case message => handleCommonMessages(waitingVel)(message)
 
-    private val suspend: (Behavior[ManagerMessage], ManagerMessage) => Behavior[ManagerMessage] = (oldState, message) =>
-      Behaviors.withStash[ManagerMessage](nBoids): stash =>
+    private val waitingPos: Behavior[ManagerMessage] =
+      Behaviors.receiveMessagePartial:
+        case UpdatedPos() =>
+          counter += 1
+          if counter == nBoids then
+            counter = 0
+            viewActor ! UpdateView(ctx.self)
+            waitingView
+          else
+            Behaviors.same
+        case message => handleCommonMessages(waitingPos)(message)
+
+    private val waitingView: Behavior[ManagerMessage] =
+      Behaviors.receiveMessage:
+        case UpdatedView() =>
+          boids.foreach(_ ! UpdateVel(ctx.self))
+          waitingVel
+        case message => handleCommonMessages(waitingView)(message)
+
+    private val suspend: Behavior[ManagerMessage] => Behavior[ManagerMessage] = oldState =>
+      Behaviors.withStash[ManagerMessage](nBoids * 2): stash =>
         Behaviors.receiveMessagePartial:
           case ResumeSimulation() => stash.unstashAll(oldState)
           case StopSimulation() => stopSimulation()
@@ -72,36 +84,14 @@ object BoidsManager:
             stash.stash(message)
             Behaviors.same
 
-    private val waitingPos: Behavior[ManagerMessage] =
-      Behaviors.receiveMessagePartial:
-        case UpdatedPos() =>
-          counter += 1
-          //ctx.log.info(s"BoidActor #$counter has updated position")
-          if counter == nBoids then
-            counter = 0
-            viewActor ! UpdateView(ctx.self)
-            waitingView
-          else
-            Behaviors.same
-        case StopSimulation() => stopSimulation()
-        case SuspendSimulation() => suspend(waitingPos, UpdatedPos())
-        case ChangeWeights(separation, alignment, cohesion) =>
-          boids.foreach(_ ! UpdateWeights(separation, alignment, cohesion))
-          Behaviors.same
-
-    private val waitingView: Behavior[ManagerMessage] =
-      Behaviors.receiveMessagePartial:
-        case UpdatedView() =>
-          //ctx.log.info(s"ViewActor has updated view")
-          boids.foreach(_ ! UpdateVel(ctx.self))
-          waitingVel
-        case StopSimulation() => stopSimulation()
-        case SuspendSimulation() => suspend(waitingView, UpdatedView())
-        case ChangeWeights(separation, alignment, cohesion) =>
-          boids.foreach(_ ! UpdateWeights(separation, alignment, cohesion))
-          Behaviors.same
+    private def handleCommonMessages(oldState: Behavior[ManagerMessage]): ManagerMessage => Behavior[ManagerMessage] =
+      case StopSimulation() => stopSimulation()
+      case SuspendSimulation() => suspend(oldState)
+      case ChangeWeights(separation, alignment, cohesion) =>
+        boids.foreach(_ ! UpdateWeights(separation, alignment, cohesion))
+        oldState
+      case _ => Behaviors.unhandled
 
     private def stopSimulation(): Behavior[ManagerMessage] =
-      ctx.log.info(s"STOP")
       boids.foreach(ctx.stop)
       initialBehavior(viewActor, this)

@@ -39,8 +39,4 @@ object Launcher extends App:
       |}
       |""".stripMargin
   private val myConfig = ConfigFactory.parseString(blockingScheduler)
-  private val regularConfig = ConfigFactory.load()
-  val combined = myConfig.withFallback(regularConfig)
   private val system: ActorSystem[Nothing] = ActorSystem(MainActor(), "main-actor", myConfig)
-  /*Thread.sleep(5000)
-  system.terminate()*/

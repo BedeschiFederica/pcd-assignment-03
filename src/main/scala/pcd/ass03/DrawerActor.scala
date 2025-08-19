@@ -28,20 +28,19 @@ object DrawerActor:
     _panel = createPanel(width, height)
     drawing(manager.get)
 
+  def panel(): FlowPanel = _panel
+
   private val drawing: ActorRef[ManagerMessage] => Behavior[DrawMessage] = manager =>
-    Behaviors.receivePartial:
+    Behaviors.receive:
       (context, message) => message match
         case DrawBoids() =>
-          //context.log.info("Drawing")
           boidsPosition = List.empty
           boids.foreach(_ ! Ask(context.self))
           waitingPositions(manager)
-        case UpdatedFrameRate(rate) =>
-          frameRate = rate
-          Behaviors.same
+        case message => handleCommonMessages(drawing(manager))(message)
 
   private val waitingPositions: ActorRef[ManagerMessage] => Behavior[DrawMessage] = manager =>
-    Behaviors.receivePartial:
+    Behaviors.receive:
       (context, message) =>
         message match
           case Send(pos, _, _) =>
@@ -55,11 +54,13 @@ object DrawerActor:
               drawing(manager)
             else
               Behaviors.same
-          case UpdatedFrameRate(rate) =>
-            frameRate = rate
-            Behaviors.same
+          case message => handleCommonMessages(waitingPositions(manager))(message)
 
-  def panel(): FlowPanel = _panel
+  private def handleCommonMessages(oldState: Behavior[DrawMessage]): DrawMessage => Behavior[DrawMessage] =
+    case UpdatedFrameRate(rate) =>
+      frameRate = rate
+      oldState
+    case _ => Behaviors.unhandled
 
   private def updateFrameRate(ctx: ActorContext[DrawMessage]): Unit =
     val t1 = System.currentTimeMillis
@@ -69,16 +70,14 @@ object DrawerActor:
       frameRate = FrameRate
       given ExecutionContext =
         ctx.system.dispatchers.lookup(DispatcherSelector.fromConfig("my-blocking-dispatcher"))
-      val f: Future[Unit] = Future:
-        Thread.sleep(frameRatePeriod - dtElapsed)
-      ctx.pipeToSelf(f) {
+      val f: Future[Unit] = Future(Thread.sleep(frameRatePeriod - dtElapsed))
+      ctx.pipeToSelf(f):
         case Success(_) => UpdatedFrameRate(frameRate)
         case _ => throw IllegalStateException("Future unsuccessful.")
-      }
     else
       frameRate = (1000 / dtElapsed).toInt
       ctx.self ! UpdatedFrameRate(frameRate)
-    this.t0 = System.currentTimeMillis
+    t0 = System.currentTimeMillis
 
   private def createPanel(width: Int, height: Int): FlowPanel =
     new FlowPanel():

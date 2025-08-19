@@ -33,36 +33,25 @@ object BoidActor:
     private var nearbyBoids: Map[ActorRef[BoidDrawMessage], (P2d, V2d)] = Map.empty
     private var counter = 0
 
-    val boidReceive: Behavior[BoidMessage] = Behaviors.receiveMessagePartial:
+    val boidReceive: Behavior[BoidMessage] = Behaviors.receiveMessage:
       case SendBoids(boidsList) =>
         boids = boidsList
         Behaviors.same
       case UpdateVel(from) =>
-        //ctx.log.info(s"${ctx.self}: Updating vel, from $from")
         nearbyBoids = Map.empty
         boids.foreach(_ ! Ask(ctx.self))
         getNearbyBoids(from)
       case UpdatePos(from) =>
-        //ctx.log.info(s"${ctx.self}: Updating pos, from $from")
         updatePosition()
         from ! UpdatedPos()
         Behaviors.same
-      case Ask(from) =>
-        from ! Send(pos, vel, ctx.self)
-        Behaviors.same
-      case UpdateWeights(separation, alignment, cohesion) =>
-        separationWeight = separation
-        alignmentWeight = alignment
-        cohesionWeight = cohesion
-        Behaviors.same
+      case message => handleCommonMessages(boidReceive)(message)
 
     private val getNearbyBoids: ActorRef[ManagerMessage] => Behavior[BoidMessage] = from =>
-      Behaviors.receiveMessagePartial:
+      Behaviors.receiveMessage:
         case Send(otherPos, otherVel, otherBoid) =>
           counter += 1
-          val distance = pos.distance(otherPos)
-          if distance < PerceptionRadius then
-            nearbyBoids += (otherBoid, (otherPos, otherVel))
+          if pos.distance(otherPos) < PerceptionRadius then nearbyBoids += (otherBoid, (otherPos, otherVel))
           if counter == nBoids - 1 then
             counter = 0
             updateVelocity()
@@ -70,32 +59,34 @@ object BoidActor:
             boidReceive
           else
             Behaviors.same
-        case Ask(from) =>
-          from ! Send(pos, vel, ctx.self)
-          Behaviors.same
-        case UpdateWeights(separation, alignment, cohesion) =>
-          separationWeight = separation
-          alignmentWeight = alignment
-          cohesionWeight = cohesion
-          Behaviors.same
+        case message => handleCommonMessages(getNearbyBoids(from))(message)
+
+    private def handleCommonMessages(oldState: Behavior[BoidMessage]): BoidMessage => Behavior[BoidMessage] =
+      case Ask(from) =>
+        from ! Send(pos, vel, ctx.self)
+        oldState
+      case UpdateWeights(separation, alignment, cohesion) =>
+        updateWeights(separation, alignment, cohesion)
+        oldState
+      case _ => Behaviors.unhandled
+
+    private def updateWeights(separation: Double, alignment: Double, cohesion: Double): Unit =
+      separationWeight = separation
+      alignmentWeight = alignment
+      cohesionWeight = cohesion
 
     private def updateVelocity(): Unit =
-      val separation = calculateSeparation()
-      val alignment = calculateAlignment()
-      val cohesion = calculateCohesion()
-      vel = vel + (alignment * alignmentWeight) + (separation * separationWeight) + (cohesion * cohesionWeight)
-      if vel.abs > MaxSpeed then
-        vel = vel.getNormalized * MaxSpeed
+      vel += (calculateSeparation() * separationWeight) + (calculateAlignment() * alignmentWeight) +
+        (calculateCohesion() * cohesionWeight)
+      if vel.abs > MaxSpeed then vel = vel.getNormalized * MaxSpeed
 
     private def updatePosition(): Unit =
-      pos += vel
-      pos += (
-        pos match
-          case P2d(x, y) if x < MinX => V2d(EnvironmentWidth, 0)
-          case P2d(x, y) if x >= MaxX => V2d(-EnvironmentWidth, 0)
-          case P2d(x, y) if y < MinY => V2d(0, EnvironmentHeight)
-          case P2d(x, y) if y >= MaxY => V2d(0, -EnvironmentHeight)
-          case _ => V2d(0, 0)
+      pos += vel + (pos match
+        case P2d(x, y) if x < MinX => V2d(EnvironmentWidth, 0)
+        case P2d(x, y) if x >= MaxX => V2d(-EnvironmentWidth, 0)
+        case P2d(x, y) if y < MinY => V2d(0, EnvironmentHeight)
+        case P2d(x, y) if y >= MaxY => V2d(0, -EnvironmentHeight)
+        case _ => V2d(0, 0)
       )
 
     private def calculateSeparation(): V2d =
@@ -109,12 +100,12 @@ object BoidActor:
             dx += pos.x - otherPos.x
             dy += pos.y - otherPos.y
             count += 1
-      if count > 0 then
-        dx /= count
-        dy /= count
-        V2d(dx, dy).getNormalized
-      else
-        V2d(0, 0)
+      count match
+        case n if n > 0 =>
+          dx /= count
+          dy /= count
+          V2d(dx, dy).getNormalized
+        case _ => V2d(0, 0)
 
     private def calculateAlignment(): V2d =
       var avgVx: Double = 0

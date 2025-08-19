@@ -6,7 +6,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import scala.concurrent.Future
 import scala.swing.*
 import scala.swing.event.ButtonClicked
-import scala.util.Success
+import scala.util.{Success, Try}
 
 final case class Click()
 
@@ -14,6 +14,7 @@ object EnteringPanelActor:
   private val TextFieldColumns = 25
   private val FontSize = 14
   private val XLayoutAlignment = 0.5
+
   private val _panel = BorderPanel()
   private val field = new TextField(TextFieldColumns):
     horizontalAlignment = Alignment.Center
@@ -29,21 +30,15 @@ object EnteringPanelActor:
       startButton.listenTo(startButton.mouse.clicks)
       startButton.reactions += {
         case event: ButtonClicked =>
-          context.pipeToSelf(Future.successful(event)) {
+          context.pipeToSelf(Future.successful(event)):
             case Success(_) => Click()
             case _ => throw IllegalStateException("Future unsuccessful.")
-          }
       }
       Behaviors.receiveMessage:
         case Click() =>
-          try
-            val nBoids = field.text.toInt
-            if nBoids > 0 then
-              println("Starting simulation")
-              manager ! Start(nBoids)
-            else println("Illegal value inserted! Positive integer is requested.")
-          catch case ex: NumberFormatException => println("Illegal value inserted! Integer is requested.")
-          context.log.info(s"Click")
+          Try(field.text.toInt) match
+            case Success(nBoids) if nBoids > 0 => manager ! Start(nBoids)
+            case _ => Console.err.println("Illegal value inserted! Positive integer is requested.")
           Behaviors.same
 
   def panel(): BorderPanel = _panel
