@@ -1,10 +1,7 @@
-package pcd.ass03.controller
+/*package pcd.ass03.controller
 
-/*
-package controller
-
-import model.{AIMovement, GameInitializer, MockGameStateManager, World}
-import view.{GlobalView, LocalView}
+import pcd.ass03.model.{AIMovement, GameInitializer, MockGameStateManager, World}
+import pcd.ass03.view.{GlobalView, LocalView}
 
 import java.awt.Window
 import java.util.{Timer, TimerTask}
@@ -35,5 +32,4 @@ object Main extends SimpleSwingApplication:
     new LocalView(manager, "p1").open()
     new LocalView(manager, "p2").open()
     // No launcher window, just return an empty frame (or null if allowed)
-    new Frame { visible = false }
-*/
+    new Frame { visible = false }*/

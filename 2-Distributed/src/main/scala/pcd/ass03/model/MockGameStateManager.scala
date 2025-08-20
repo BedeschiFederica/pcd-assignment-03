@@ -1,25 +1,20 @@
 package pcd.ass03.model
 
 trait GameStateManager:
+  def world: World
+  def movePlayerDirection(id: String, position: Position): Unit
 
-  def getWorld: World
-  def movePlayerDirection(id: String, dx: Double, dy: Double): Unit
+class MockGameStateManager(override val world: World, speed: Double = 10.0) extends GameStateManager:
 
-class MockGameStateManager(
-    var world: World,
-    val speed: Double = 10.0
-) extends GameStateManager:
-
-  private var directions: Map[String, (Double, Double)] = Map.empty
-  def getWorld: World = world
+  private var directions: Map[String, Position] = Map.empty
 
   // Move a player in a given direction (dx, dy)
-  def movePlayerDirection(id: String, dx: Double, dy: Double): Unit =
-    directions = directions.updated(id, (dx, dy))
+  def movePlayerDirection(id: String, position: Position): Unit =
+    directions = directions.updated(id, position)
 
   def tick(): Unit =
     directions.foreach:
-      case (id, (dx, dy)) =>
+      case (id, pos) =>
         world.playerById(id) match
           case Some(player) =>
             //world = updateWorldAfterMovement(updatePlayerPosition(player, dx, dy))
@@ -31,7 +26,7 @@ class MockGameStateManager(
     val newY = (player.pos.y + dy * speed).max(0).min(world.height)
     player.copy(player.id, pos = Position(newX, newY), player.mass)
 
-  /*private def updateWorldAfterMovement(player: Player): World =
+  private def updateWorldAfterMovement(player: Player): World =
     val foodEaten = world.foods.filter(food => EatingManager.canEatFood(player, food))
     val playerEatsFood = foodEaten.foldLeft(player)((p, food) => p.grow(food))
     val playersEaten = world
@@ -41,4 +36,4 @@ class MockGameStateManager(
     world
       .updatePlayer(playerEatPlayers)
       .removePlayers(playersEaten)
-      .removeFoods(foodEaten)*/
+      .removeFoods(foodEaten)

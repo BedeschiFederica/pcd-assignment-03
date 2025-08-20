@@ -17,15 +17,11 @@ sealed trait Entity:
   def mass: Double
   def pos: Position
   def radius: Double = math.sqrt(mass / math.Pi)
-
-  def distanceTo(other: Entity): Double =
-    val dx = pos.x - other.pos.x
-    val dy = pos.y - other.pos.y
-    math.hypot(dx, dy)
+  def distanceTo(other: Entity): Double = math.hypot(pos.x - other.pos.x, pos.y - other.pos.y)
 
 sealed trait Player extends Entity:
   def copy(id: String, pos: Position, mass: Double): Player
-  //def grow(entity: Entity): Player
+  def grow(entity: Entity): Player = this
 
 object Player:
 
@@ -79,12 +75,31 @@ object Food:
 
   trait FoodMessage extends Message
   private object FoodMessage:
-    case class Move() extends FoodMessage
     case class Stop() extends FoodMessage
-    case class Grow(entity: Entity) extends FoodMessage
 
-  def apply(id: String, pos: Position, mass: Double = 100.0) = ???
+  import FoodMessage.*
 
+  def apply(id: String, pos: Position, mass: Double = 100.0): Behavior[FoodMessage | Receptionist.Listing] =
+    Behaviors.setup:
+      context =>
+        context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, context.self)
+        FoodImpl(id, pos, mass, context).receive
+
+  private case class FoodImpl(override val id: String, override val pos: Position, override val mass: Double,
+                                ctx: ActorContext[FoodMessage | Receptionist.Listing],
+                                private var frontends: List[ActorRef[PlayerViewMessage.Render]] = List.empty)
+                               extends Food:
+
+    val receive: Behavior[FoodMessage | Receptionist.Listing] = Behaviors.receiveMessagePartial:
+      case msg: Receptionist.Listing =>
+        ctx.log.info(s"New frontend! $msg")
+        val services = msg.serviceInstances(PlayerView.Service).toList
+        if (services == frontends)
+          Behaviors.same
+        else
+          frontends = msg.serviceInstances(PlayerView.Service).toList
+          receive
+      case Stop() => Behaviors.stopped
 
 object World:
 

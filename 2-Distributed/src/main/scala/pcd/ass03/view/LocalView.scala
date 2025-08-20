@@ -4,7 +4,7 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass03.Message
-import pcd.ass03.model.Position
+import pcd.ass03.model.{MockGameStateManager, Position}
 
 import java.awt.Graphics2D
 import javax.swing.SwingUtilities
@@ -23,7 +23,8 @@ object PlayerView:
   val Service: ServiceKey[Render] = ServiceKey[Render]("RenderService")
   def apply(frameRate: Double = 60): Behavior[PlayerViewMessage] =
     Behaviors.setup: ctx =>
-      val frontendGui = LocalView() // init the gui
+      val frontendGui = LocalView(null, "") // init the gui
+      frontendGui.open()
       Behaviors.withTimers: timers =>
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
         var toRender: Map[ActorRef[_], (Position, Double)] = Map.empty
@@ -38,13 +39,11 @@ object PlayerView:
             frontendGui.update(toRender.values.toList)
             Behaviors.same
 
-class LocalView extends MainFrame: //manager: MockGameStateManager,
-
+class LocalView(manager: MockGameStateManager, playerId: String) extends MainFrame:
   private var entities: List[(Position, Double)] = List.empty
   private val panel = new FlowPanel:
     listenTo(keys, mouse.moves)
     focusable = true
-    visible = true
     requestFocusInWindow()
 
     override def paintComponent(g: Graphics2D): Unit =
@@ -63,9 +62,8 @@ class LocalView extends MainFrame: //manager: MockGameStateManager,
         .getOrElse((0.0, 0.0))
       AgarViewUtils.drawWorld(g, world, offsetX, offsetY)*/
 
-  title = s"Agar.io - Local View"
+  title = s"Agar.io - Local View - $playerId"
   preferredSize = new Dimension(400, 400)
-  visible = true
   contents = panel
 
   def update(values: List[(Position, Double)]): Unit = SwingUtilities.invokeLater: () =>

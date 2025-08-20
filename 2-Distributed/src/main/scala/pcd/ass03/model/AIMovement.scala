@@ -21,7 +21,7 @@ object AIMovement:
     *   The game state manager that provides world state and movement capabilities
     */
   def moveAI(name: String, gameManager: GameStateManager): Unit =
-    val world = gameManager.getWorld
+    val world = gameManager.world
     val aiOpt = world.playerById(name)
     val foodOpt = nearestFood(name, world)
     (aiOpt, foodOpt) match
@@ -29,8 +29,6 @@ object AIMovement:
         val dx = food.pos.x - ai.pos.x
         val dy = food.pos.y - ai.pos.y
         val distance = math.hypot(dx, dy)
-        if (distance > 0)
-          val normalizedDx = dx / distance
-          val normalizedDy = dy / distance
-          gameManager.movePlayerDirection(name, normalizedDx, normalizedDy)
+        if distance > 0 then
+          gameManager.movePlayerDirection(name, Position(dx / distance, dy / distance))
       case _ => // Do nothing if AI or food doesn't exist

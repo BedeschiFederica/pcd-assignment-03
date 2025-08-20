@@ -12,5 +12,5 @@ class GlobalView(manager: MockGameStateManager) extends MainFrame:
 
   contents = new Panel:
     override def paintComponent(g: Graphics2D): Unit =
-      val world = manager.getWorld
+      val world = manager.world
       AgarViewUtils.drawWorld(g, world)
