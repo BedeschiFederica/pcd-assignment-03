@@ -55,6 +55,7 @@ class LocalView extends MainFrame: //manager: MockGameStateManager,
           //val (borderX, borderY) = toScreenCenter(pos, radius)
           g.setColor(java.awt.Color.blue)
           g.drawOval(pos.x.toInt, pos.y.toInt, diameter.toInt, diameter.toInt)
+          g.fillOval(pos.x.toInt, pos.y.toInt, diameter.toInt, diameter.toInt)
       /*val world = manager.getWorld
       val playerOpt = world.players.find(_.id == playerId)
       val (offsetX, offsetY) = playerOpt

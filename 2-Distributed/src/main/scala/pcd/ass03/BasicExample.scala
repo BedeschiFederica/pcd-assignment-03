@@ -22,7 +22,7 @@ object Root:
       given random: Random = Random()
       val (x, y) = (random.nextInt(300), random.nextInt(300))
       ctx.spawnAnonymous(PlayerView())
-      ctx.spawnAnonymous(Player(playerId, Position(x, y), 50, 20))
+      ctx.spawnAnonymous(Player(playerId, Position(x, y), mass = 120))
     Behaviors.empty
 
 @main def mainTest(): Unit =

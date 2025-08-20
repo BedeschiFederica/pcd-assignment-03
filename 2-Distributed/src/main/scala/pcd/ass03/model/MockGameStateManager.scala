@@ -22,7 +22,7 @@ class MockGameStateManager(
       case (id, (dx, dy)) =>
         world.playerById(id) match
           case Some(player) =>
-            world = updateWorldAfterMovement(updatePlayerPosition(player, dx, dy))
+            //world = updateWorldAfterMovement(updatePlayerPosition(player, dx, dy))
           case None =>
           // Player not found, ignore movement
 
@@ -31,7 +31,7 @@ class MockGameStateManager(
     val newY = (player.pos.y + dy * speed).max(0).min(world.height)
     player.copy(player.id, pos = Position(newX, newY), player.mass)
 
-  private def updateWorldAfterMovement(player: Player): World =
+  /*private def updateWorldAfterMovement(player: Player): World =
     val foodEaten = world.foods.filter(food => EatingManager.canEatFood(player, food))
     val playerEatsFood = foodEaten.foldLeft(player)((p, food) => p.grow(food))
     val playersEaten = world
@@ -41,4 +41,4 @@ class MockGameStateManager(
     world
       .updatePlayer(playerEatPlayers)
       .removePlayers(playersEaten)
-      .removeFoods(foodEaten)
+      .removeFoods(foodEaten)*/
