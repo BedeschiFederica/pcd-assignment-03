@@ -1,5 +1,5 @@
 package pcd.ass03.model
-
+/*
 /** Object responsible for AI movement logic, separate from the game state management */
 object AIMovement:
 
@@ -32,3 +32,4 @@ object AIMovement:
         if distance > 0 then
           gameManager.movePlayerDirection(name, Position(dx / distance, dy / distance))
       case _ => // Do nothing if AI or food doesn't exist
+*/

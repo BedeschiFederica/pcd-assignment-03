@@ -20,7 +20,7 @@ object AgarViewUtils:
       playerPalette(idx % playerPalette.length)
     case _ => Color.gray
 
-  def drawWorld(
+  /*def drawWorld(
       g: Graphics2D,
       world: World,
       offsetX: Double = 0,
@@ -53,3 +53,4 @@ object AgarViewUtils:
       g.setColor(playerBorderColor)
       val (labelX, labelY) = toScreenLabel(player.pos.x, player.pos.y)
       g.drawString(player.id, labelX, labelY)
+*/

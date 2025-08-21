@@ -1,5 +1,5 @@
 package pcd.ass03.view
-
+/*
 import pcd.ass03.model.MockGameStateManager
 
 import java.awt.{Color, Graphics2D}
@@ -14,3 +14,4 @@ class GlobalView(manager: MockGameStateManager) extends MainFrame:
     override def paintComponent(g: Graphics2D): Unit =
       val world = manager.world
       AgarViewUtils.drawWorld(g, world)
+*/

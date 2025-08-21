@@ -1,6 +1,6 @@
 package pcd.ass03.model
 
-trait GameStateManager:
+/*trait GameStateManager:
   def world: World
   def movePlayerDirection(id: String, position: Position): Unit
 
@@ -37,3 +37,4 @@ class MockGameStateManager(override val world: World, speed: Double = 10.0) exte
       .updatePlayer(playerEatPlayers)
       .removePlayers(playersEaten)
       .removeFoods(foodEaten)
+*/
