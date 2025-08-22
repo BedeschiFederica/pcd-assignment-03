@@ -1,15 +1,14 @@
 package pcd.ass03.model
 
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass03.Message
 import pcd.ass03.view.PlayerView
 import pcd.ass03.view.PlayerView.PlayerViewMessage
 
-import scala.util.{Random, Success}
+import scala.util.Random
 import concurrent.duration.DurationInt
-import scala.concurrent.Future
 
 case class Position(x: Double, y: Double)
 
@@ -161,84 +160,69 @@ object World:
 
   val Service: ServiceKey[WorldMessage] = ServiceKey[WorldMessage]("WorldService")
   def apply(width: Int, height: Int): Behavior[WorldMessage | Receptionist.Listing] =
-    WorldImpl(width, height).idle
-    /*Behaviors.setup:
+    Behaviors.setup:
       context =>
         context.system.receptionist ! Receptionist.Register(Service, context.self)
         val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter(listing => listing)
         context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
-        context.system.receptionist ! Receptionist.Subscribe(Player.Service, listingAdapter)*/
-        /*Behaviors.withTimers: timers =>
-            timers.startTimerAtFixedRate(Tick(), 1000.milliseconds)
-            WorldImpl(width, height, ctx = context).receive*/
-        /*Behaviors.withTimers:
-          timers => WorldImpl(width, height, ctx = context, timers).receive*/
-        //WorldImpl(width, height, ctx = context).idle
+        context.system.receptionist ! Receptionist.Subscribe(Player.Service, listingAdapter)
+        Behaviors.withTimers: timers =>
+            timers.startTimerAtFixedRate(Tick(), 60.milliseconds)
+            WorldImpl(width, height, ctx = context).receive
 
-  private case class WorldImpl(width: Int, height: Int, foods: Seq[Food] = List.empty):
+  private case class WorldImpl(width: Int, height: Int, foods: Seq[Food] = List.empty,
+                               ctx: ActorContext[WorldMessage | Receptionist.Listing]):
     private val Speed = 10.0
     private var players: Seq[ActorRef[PlayerMessage]] = List.empty
     private var playerViews: Seq[ActorRef[PlayerViewMessage]] = List.empty
     private var playersValues: Map[ActorRef[PlayerMessage], (Position, Double)] = Map.empty
     private var counter = 0
 
-    def idle: Behavior[WorldMessage | Receptionist.Listing] =
-      Behaviors.setup: ctx =>
-        ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
-        val listingAdapter: ActorRef[Receptionist.Listing] = ctx.messageAdapter(listing => listing)
-        ctx.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
-        ctx.system.receptionist ! Receptionist.Subscribe(Player.Service, listingAdapter)
-        Behaviors.withStash(1000): stash =>
-          Behaviors.withTimers: timers =>
-            timers.startTimerAtFixedRate("key", Tick(), 100.milliseconds)
+    val receive: Behavior[WorldMessage | Receptionist.Listing] = Behaviors.receiveMessagePartial:
+      case msg: Receptionist.Listing =>
+        //ctx.log.info(s"Listing: $msg")
+        msg.key match
+          case PlayerView.Service =>
+            ctx.log.info(s"LISTING VIEWS: ${msg.serviceInstances[PlayerViewMessage](PlayerView.Service).toList}")
+            val viewServices = msg.serviceInstances[PlayerViewMessage](PlayerView.Service).toList
+            if viewServices != playerViews then playerViews = viewServices
+          case Player.Service =>
+            ctx.log.info(s"LISTING PLAYERS: ${msg.serviceInstances[PlayerMessage](Player.Service).toList}")
+            val playerServices = msg.serviceInstances[PlayerMessage](Player.Service).toList
+            if playerServices != players then players = playerServices
+        Behaviors.same
+      case Tick() =>
+        ctx.log.info(s"TICK")
+        if players.nonEmpty then
+          players.foreach(_ ! Ask(ctx.self))
+          waitingValues
+        else
+          Behaviors.same
+      case UpdateWorld() =>
+        ctx.log.info(s"RECEIVED UPDATE WORLD, map: $playersValues")
+        playerViews.foreach(_ ! RenderAll(playersValues.map((player, values) => (player.path.name, values))))
+        Behaviors.same
 
-            def receive: Behavior[WorldMessage | Receptionist.Listing] = Behaviors.receiveMessagePartial:
-              case msg: Receptionist.Listing =>
-                //ctx.log.info(s"Listing: $msg")
-                msg.key match
-                  case PlayerView.Service =>
-                    ctx.log.info(s"LISTING VIEWS: ${msg.serviceInstances[PlayerViewMessage](PlayerView.Service).toList}")
-                    val viewServices = msg.serviceInstances[PlayerViewMessage](PlayerView.Service).toList
-                    if viewServices != playerViews then playerViews = viewServices
-                  case Player.Service =>
-                    ctx.log.info(s"LISTING PLAYERS: ${msg.serviceInstances[PlayerMessage](Player.Service).toList}")
-                    val playerServices = msg.serviceInstances[PlayerMessage](Player.Service).toList
-                    if playerServices != players then players = playerServices
-                Behaviors.same
-              case Tick() =>
-                ctx.log.info(s"TICK, ${timers.isTimerActive("key")}")
-                if players.nonEmpty then
-                  players.foreach(_ ! Ask(ctx.self))
-                  waitingValues
-                else
-                  Behaviors.same
-              case UpdateWorld() =>
-                ctx.log.info(s"RECEIVED UPDATE WORLD, map: $playersValues, timer: ${timers.isTimerActive("key")}")
-                playerViews.foreach(_ ! RenderAll(playersValues.map((player, values) => (player.path.name, values))))
-                Behaviors.same
-
-            def waitingValues: Behavior[WorldMessage | Receptionist.Listing] =
-              //ehaviors.withStash[WorldMessage | Receptionist.Listing](1000): stash =>
-              Behaviors.receiveMessagePartial:
-                case Send(pos, radius, from) =>
-                  ctx.log.info(s"received: $pos, $radius, $from")
-                  counter += 1
-                  playersValues = playersValues + (from -> (pos, radius))
-                  if counter == players.size then
-                    ctx.log.info(s"SEND UPDATE WORLD, ${timers.isTimerActive("key")}")
-                    counter = 0
-                    stash.stash(UpdateWorld())
-                    stash.unstashAll(receive)
-                  else
-                    Behaviors.same
-                  /*val newX = (posToSearch.x + dir._1 * Speed).max(0).min(width)
-                  val newY = (posToSearch.y + dir._2 * Speed).max(0).min(height)*/
-                case message =>
-                  ctx.log.info(s"message: $message")
-                  stash.stash(message)
-                  Behaviors.same
-
-            receive
+    private val waitingValues: Behavior[WorldMessage | Receptionist.Listing] =
+      Behaviors.withStash[WorldMessage | Receptionist.Listing](1000): stash =>
+        Behaviors.receiveMessagePartial:
+          case Send(pos, radius, from) =>
+            ctx.log.info(s"received: $pos, $radius, $from")
+            counter += 1
+            playersValues = playersValues + (from -> (pos, radius))
+            if counter == players.size then
+              ctx.log.info(s"SEND UPDATE WORLD")
+              counter = 0
+              stash.stash(UpdateWorld())
+              stash.unstashAll(receive)
+            else
+              Behaviors.same
+            /*val newX = (posToSearch.x + dir._1 * Speed).max(0).min(width)
+            val newY = (posToSearch.y + dir._2 * Speed).max(0).min(height)*/
+          case message =>
+            ctx.log.info(s"message: $message")
+            stash.stash(message)
+            Behaviors.same
 
     /*def playersExcludingSelf(player: Player): Seq[Player] =
       players.filterNot(_.id == player.id)
