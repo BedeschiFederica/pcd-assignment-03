@@ -28,15 +28,16 @@ object PlayerActor:
 
   val Service: ServiceKey[PlayerMessage] = ServiceKey[PlayerMessage]("PlayerService")
   def apply(id: String, pos: Position, mass: Double)
-           (using random: Random): Behavior[PlayerMessage | Receptionist.Listing] =
+           (width: Int, height: Int): Behavior[PlayerMessage | Receptionist.Listing] =
     Behaviors.setup:
       context =>
         context.system.receptionist ! Receptionist.Register(Service, context.self)
         val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter(listing => listing)
         context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
-        PlayerImpl(Player(id, pos, mass), context).receive
+        PlayerImpl(Player(id, pos, mass), context)(width, height).receive
 
-  private case class PlayerImpl(private var player: Player, ctx: ActorContext[PlayerMessage | Receptionist.Listing]):
+  private case class PlayerImpl(private var player: Player, ctx: ActorContext[PlayerMessage | Receptionist.Listing])
+                               (width: Int, height: Int):
     private val Speed = 10.0
     private val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
     private var playerView: Option[ActorRef[PlayerViewMessage]] = Option.empty
@@ -52,8 +53,8 @@ object PlayerActor:
         Behaviors.same
       case Move(dx, dy) =>
         //ctx.log.info(s"PlayerView: $playerView")
-        player = player.copy(pos = Position((player.pos.x + dx * Speed).max(0).min(400),
-          (player.pos.y + dy * Speed).max(0).min(400)))
+        player = player.copy(pos = Position((player.pos.x + dx * Speed).max(0).min(width),
+          (player.pos.y + dy * Speed).max(0).min(height)))
         //ctx.log.info(s"move to $pos}, ${ctx.self.path}")
         if playerView.nonEmpty then playerView.get ! PlayerViewMessage.Render(player, ctx.self)
         Behaviors.same
@@ -78,15 +79,15 @@ object FoodManager:
   import FoodManagerMessage.*
 
   val Service: ServiceKey[FoodManagerMessage] = ServiceKey[FoodManagerMessage]("FoodManagerService")
-  def apply(): Behavior[FoodManagerMessage] =
+  def apply(width: Int, height: Int): Behavior[FoodManagerMessage] =
     Behaviors.setup:
       context =>
         context.system.receptionist ! Receptionist.Register(Service, context.self)
-        FoodManagerImpl(context).receive
+        FoodManagerImpl(context)(width, height).receive
 
-  private case class FoodManagerImpl(ctx: ActorContext[FoodManagerMessage]):
+  private case class FoodManagerImpl(ctx: ActorContext[FoodManagerMessage])(width: Int, height: Int):
     private var foods: List[Food] =
-      (1 to 8).map(i => Food(s"f$i", Position(Random.nextInt(400), Random.nextInt(400)))).toList
+      (1 to 8).map(i => Food(s"f$i", Position(Random.nextInt(width), Random.nextInt(height)))).toList
 
     val receive: Behavior[FoodManagerMessage] = Behaviors.receiveMessagePartial:
       case FoodManagerMessage.Ask(from) =>

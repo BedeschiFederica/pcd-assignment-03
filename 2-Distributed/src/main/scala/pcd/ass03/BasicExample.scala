@@ -17,19 +17,20 @@ object Roles:
   val world: String = "world"
 
 object Root:
+  private val width = 1000
+  private val height = 1000
+
   def apply(id: String, period: FiniteDuration = 60 milliseconds): Behavior[Nothing] = Behaviors.setup: ctx =>
     val cluster = Cluster(ctx.system)
     if cluster.selfMember.hasRole(Roles.player) then
-      given random: Random = Random()
-      val (x, y) = (random.nextInt(300), random.nextInt(300))
-      val playerViewName =
-        PlayerView.getClass.getSimpleName.dropRight(1)
-      ctx.spawn(PlayerView(), s"$playerViewName$id")
+      val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
+      ctx.spawn(PlayerView(width, height)(), s"$playerViewName$id")
       val playerId = s"p$id"
-      ctx.spawn(PlayerActor(playerId, Position(x, y), mass = 120), playerId)
+      ctx.spawn(PlayerActor(playerId, Position(Random.nextInt(width), Random.nextInt(height)), mass = 120)
+        (width, height), playerId)
     else
-      ctx.spawnAnonymous(WorldManager(400, 400))
-      ctx.spawnAnonymous(FoodManager())
+      ctx.spawnAnonymous(WorldManager(width, height))
+      ctx.spawnAnonymous(FoodManager(width, height))
     Behaviors.empty
 
 @main def mainTest(): Unit =

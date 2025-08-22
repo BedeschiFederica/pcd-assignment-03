@@ -5,7 +5,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass03.Message
 import pcd.ass03.model.WorldManager.WorldMessage
-import pcd.ass03.model.{Player, Position, World, WorldManager}
+import pcd.ass03.model.{Player, World, WorldManager}
 
 import java.awt.Graphics2D
 import javax.swing.SwingUtilities
@@ -30,13 +30,14 @@ object PlayerView:
   export AgarViewUtils.*
 
   val Service: ServiceKey[PlayerViewMessage] = ServiceKey[PlayerViewMessage]("RenderService")
-  def apply(frameRate: Double = 60): Behavior[PlayerViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
-    ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
-    val listingAdapter: ActorRef[Receptionist.Listing] = ctx.messageAdapter(listing => listing)
-    ctx.system.receptionist ! Receptionist.Subscribe(WorldManager.Service, listingAdapter)
-    PlayerViewImpl(frameRate).setup
+  def apply(width: Int, height: Int)(frameRate: Double = 60): Behavior[PlayerViewMessage | Receptionist.Listing] =
+    Behaviors.setup: ctx =>
+      ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
+      val listingAdapter: ActorRef[Receptionist.Listing] = ctx.messageAdapter(listing => listing)
+      ctx.system.receptionist ! Receptionist.Subscribe(WorldManager.Service, listingAdapter)
+      PlayerViewImpl(width, height)(frameRate).setup
 
-  private case class PlayerViewImpl(frameRate: Double):
+  private case class PlayerViewImpl(width: Int, height: Int)(frameRate: Double):
     private var playerActor: Option[ActorRef[PlayerMessage]] = Option.empty
     private var worldActor: Option[ActorRef[WorldMessage]] = Option.empty
     private var world: Option[World] = Option.empty
@@ -60,7 +61,7 @@ object PlayerView:
             if playerActor.isEmpty then playerActor = Some(from)
             //ctx.log.info(s"RENDER PLAYER.. $id: $pos")
             if world.isEmpty then
-              world = Some(World(400, 400, List(player), List.empty))
+              world = Some(World(width, height, List(player), List.empty))
             else
               world = Some(world.get.updatePlayer(player))
             update()
