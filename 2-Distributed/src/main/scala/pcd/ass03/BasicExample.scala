@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.*
 import akka.actor.typed.Behavior
 import akka.cluster.*
 import akka.cluster.typed.Cluster
-import pcd.ass03.model.{Player, Position, World}
+import pcd.ass03.model.{FoodManager, Player, Position, World}
 import pcd.ass03.view.PlayerView
 import pcd.ass03.view.PlayerView.*
 
@@ -30,6 +30,7 @@ object Root:
       ctx.spawn(Player(id, Position(x, y), mass = 120), s"$playerName$id")
     else
       ctx.spawnAnonymous(World(400, 400))
+      ctx.spawnAnonymous(FoodManager())
     Behaviors.empty
 
 @main def mainTest(): Unit =

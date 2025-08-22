@@ -1,3 +1,4 @@
+/*
 package pcd.ass03.model
 
 object EatingManager:
@@ -15,3 +16,4 @@ object EatingManager:
   // Determines if a player can eat another player
   def canEatPlayer(player: Player, other: Player): Boolean =
     collides(player, other) && player.mass > other.mass * MASS_MARGIN
+*/

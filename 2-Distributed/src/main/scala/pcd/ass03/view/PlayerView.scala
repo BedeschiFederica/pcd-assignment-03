@@ -21,7 +21,8 @@ object PlayerView:
   trait PlayerViewMessage extends Message
   object PlayerViewMessage:
     case class Render(pos: Position, radius: Double, id: ActorRef[PlayerMessage]) extends PlayerViewMessage
-    case class RenderAll(toRender: Map[String, (Position, Double)]) extends PlayerViewMessage
+    case class RenderAll(players: Map[String, (Position, Double)], foods: Map[String, (Position, Double)])
+      extends PlayerViewMessage
     case class Flush() extends PlayerViewMessage
     case class UpdatePlayer(dx: Double, dy: Double) extends PlayerViewMessage
 
@@ -45,7 +46,7 @@ object PlayerView:
     private val receive: Behavior[PlayerViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
       Behaviors.withTimers: timers =>
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
-        var toRender: Map[String, (Position, Double)] = Map.empty
+        var toRender: (Map[String, (Position, Double)], Map[String, (Position, Double)]) = (Map.empty, Map.empty)
         Behaviors.receiveMessagePartial:
           case msg: Receptionist.Listing =>
             //ctx.log.info(s"LISTING $msg ${msg.serviceInstances(World.Service).toList}")
@@ -57,16 +58,16 @@ object PlayerView:
           case Render(pos, radius, id) =>
             if playerActor.isEmpty then playerActor = Some(id)
             ctx.log.info(s"RENDER PLAYER.. $id: $pos")
-            toRender = toRender + (id.path.name -> (pos, radius))
-            update(toRender.values.toList)
+            toRender = toRender.copy(_1 = toRender._1 + (id.path.name -> (pos, radius)))
+            update(toRender._1.values.toList, toRender._2.values.toList)
             Behaviors.same
-          case RenderAll(map) =>
-            ctx.log.info(s"RENDER ALL, map: $map")
-            toRender = map
-            update(toRender.values.toList)
+          case RenderAll(players, foods) =>
+            ctx.log.info(s"RENDER ALL, players: $players, foods: $foods")
+            toRender = (players, foods)
+            update(toRender._1.values.toList, toRender._2.values.toList)
             Behaviors.same
           case Flush() =>
-            update(toRender.values.toList)
+            update(toRender._1.values.toList, toRender._2.values.toList)
             Behaviors.same
           case UpdatePlayer(dx, dy) =>
             //ctx.log.info("UPDATE PLAYER")
@@ -74,7 +75,7 @@ object PlayerView:
             // repaint() ?
             Behaviors.same
 
-    private var entities: List[(Position, Double)] = List.empty
+    private var entities: (List[(Position, Double)], List[(Position, Double)]) = (List.empty, List.empty)
     private val panel = new FlowPanel:
       listenTo(keys, mouse.moves)
       focusable = true
@@ -82,13 +83,19 @@ object PlayerView:
 
       override def paintComponent(g: Graphics2D): Unit =
         super.paintComponent(g)
-        entities.foreach:
+        entities._1.foreach:
           (pos, radius) =>
             val diameter = radius * 2
             //val (borderX, borderY) = toScreenCenter(pos, radius)
             g.setColor(java.awt.Color.blue)
             g.drawOval(pos.x.toInt, pos.y.toInt, diameter.toInt, diameter.toInt)
             g.fillOval(pos.x.toInt, pos.y.toInt, diameter.toInt, diameter.toInt)
+        entities._2.foreach:
+          (pos, radius) =>
+            val diameter = radius * 2
+            //val (borderX, borderY) = toScreenCenter(pos, radius)
+            g.setColor(java.awt.Color.red.darker())
+            g.drawOval(pos.x.toInt, pos.y.toInt, diameter.toInt, diameter.toInt)
         /*val world = manager.getWorld
         val playerOpt = world.players.find(_.id == playerId)
         val (offsetX, offsetY) = playerOpt
@@ -113,9 +120,10 @@ object PlayerView:
             case _ => throw IllegalStateException("Future unsuccessful.")
         }
 
-    def update(values: List[(Position, Double)]): Unit = SwingUtilities.invokeLater: () =>
-      entities = values
-      panel.repaint()
+    def update(players: List[(Position, Double)], foods: List[(Position, Double)]): Unit = SwingUtilities.invokeLater:
+      () =>
+        entities = (players, foods)
+        panel.repaint()
 
     /*def toScreenCenter(pos: Position, radius: Double): (Int, Int) =
       val (offsetX, offsetY) = (pos.x - preferredSize.width / 2.0, pos.y - preferredSize.height / 2.0)
