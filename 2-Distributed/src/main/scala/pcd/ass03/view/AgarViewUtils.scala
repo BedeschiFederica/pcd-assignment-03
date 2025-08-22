@@ -1,6 +1,6 @@
 package pcd.ass03.view
 
-import pcd.ass03.model.World
+import pcd.ass03.model.{Position, World}
 
 import java.awt.{Color, Graphics2D}
 
@@ -15,14 +15,14 @@ object AgarViewUtils:
     Array(Color.blue, Color.orange, Color.cyan, Color.pink, Color.yellow, Color.red, Color.green, Color.lightGray)
 
   private def playerColor(id: String): Color = id match
-    case pid if pid.startsWith("p") =>
-      val idx = pid.drop(1).toIntOption.getOrElse(0)
+    case pid if pid.startsWith("Player") =>
+      val idx = pid.drop(6).toIntOption.getOrElse(0)
       playerPalette(idx % playerPalette.length)
     case _ => Color.gray
 
-  /*def drawWorld(
+  def drawWorld(
       g: Graphics2D,
-      world: World,
+      entities: (Map[String, (Position, Double)], List[(Position, Double)]),
       offsetX: Double = 0,
       offsetY: Double = 0
   ): Unit =
@@ -33,24 +33,24 @@ object AgarViewUtils:
       ((x - offsetX - playerLabelOffsetX).toInt, (y - offsetY - playerLabelOffsetY).toInt)
 
     // Draw foods
-    g.setColor(Color.green)
-    world.foods.foreach: food =>
-      val radius = food.radius.toInt
+    g.setColor(Color.red)
+    entities._2.foreach: food =>
+      println(s"food pos: ${food._1}")
+      val radius = food._2.toInt
       val diameter = radius * 2
-      val (foodX, foodY) = toScreenCenter(food.pos.x, food.pos.y, radius)
+      val (foodX, foodY) = toScreenCenter(food._1.x, food._1.y, radius)
       g.fillOval(foodX, foodY, diameter, diameter)
 
     // Draw players
-    world.players.foreach: player =>
-      val radius = player.radius.toInt
-      val diameter = radius * 2
-      val (borderX, borderY) = toScreenCenter(player.pos.x, player.pos.y, radius)
+    entities._1.foreach { case id -> (pos, radius) =>
+      val diameter = radius.toInt * 2
+      val (borderX, borderY) = toScreenCenter(pos.x, pos.y, radius.toInt)
       g.setColor(playerBorderColor)
       g.drawOval(borderX, borderY, diameter, diameter)
-      g.setColor(playerColor(player.id))
-      val (innerX, innerY) = toScreenCenter(player.pos.x, player.pos.y, radius - playerInnerOffset)
+      g.setColor(playerColor(id))
+      val (innerX, innerY) = toScreenCenter(pos.x, pos.y, radius.toInt - playerInnerOffset)
       g.fillOval(innerX, innerY, diameter - playerInnerBorder, diameter - playerInnerBorder)
       g.setColor(playerBorderColor)
-      val (labelX, labelY) = toScreenLabel(player.pos.x, player.pos.y)
-      g.drawString(player.id, labelX, labelY)
-*/
+      val (labelX, labelY) = toScreenLabel(pos.x, pos.y)
+      g.drawString(id, labelX, labelY)
+    }

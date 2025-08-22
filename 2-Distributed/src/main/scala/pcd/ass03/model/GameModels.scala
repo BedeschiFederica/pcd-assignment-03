@@ -49,8 +49,7 @@ object Player:
                                 ctx: ActorContext[PlayerMessage | Receptionist.Listing])
                                (using random: Random) extends Entity:
     private val Speed = 10.0
-    private val playerViewName =
-      PlayerView.getClass.getSimpleName.substring(0, PlayerView.getClass.getSimpleName.length - 1)
+    private val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
     private var playerView: Option[ActorRef[PlayerViewMessage]] = Option.empty
 
     override def pos: Position = _pos

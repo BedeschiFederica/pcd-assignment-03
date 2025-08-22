@@ -23,10 +23,10 @@ object Root:
       given random: Random = Random()
       val (x, y) = (random.nextInt(300), random.nextInt(300))
       val playerViewName =
-        PlayerView.getClass.getSimpleName.substring(0, PlayerView.getClass.getSimpleName.length - 1)
+        PlayerView.getClass.getSimpleName.dropRight(1)
       ctx.spawn(PlayerView(), s"$playerViewName$id")
       val playerName =
-        Player.getClass.getSimpleName.substring(0, Player.getClass.getSimpleName.length - 1)
+        Player.getClass.getSimpleName.dropRight(1)
       ctx.spawn(Player(id, Position(x, y), mass = 120), s"$playerName$id")
     else
       ctx.spawnAnonymous(World(400, 400))
