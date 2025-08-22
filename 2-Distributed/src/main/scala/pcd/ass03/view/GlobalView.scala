@@ -1,17 +1,68 @@
 package pcd.ass03.view
-/*
-import pcd.ass03.model.MockGameStateManager
 
-import java.awt.{Color, Graphics2D}
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
+import pcd.ass03.Message
+import pcd.ass03.model.WorldManager.WorldMessage
+import pcd.ass03.model.{World, WorldManager}
+
+import java.awt.Graphics2D
+import javax.swing.SwingUtilities
+import scala.concurrent.duration.DurationInt
 import scala.swing.*
 
-class GlobalView(manager: MockGameStateManager) extends MainFrame:
+object GlobalView:
 
-  title = "Agar.io - Global View"
-  preferredSize = new Dimension(800, 800)
+  trait GlobalViewMessage extends Message
+  object GlobalViewMessage:
+    case class RenderWorld(world: World) extends GlobalViewMessage
+    case class Flush() extends GlobalViewMessage
 
-  contents = new Panel:
-    override def paintComponent(g: Graphics2D): Unit =
-      val world = manager.world
-      AgarViewUtils.drawWorld(g, world)
-*/
+  import GlobalViewMessage.*
+  export AgarViewUtils.*
+
+  val Service: ServiceKey[GlobalViewMessage] = ServiceKey[GlobalViewMessage]("GlobalRenderService")
+  def apply(width: Int, height: Int)(frameRate: Double = 60): Behavior[GlobalViewMessage | Receptionist.Listing] =
+    Behaviors.setup: ctx =>
+      ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
+      val listingAdapter: ActorRef[Receptionist.Listing] = ctx.messageAdapter(listing => listing)
+      ctx.system.receptionist ! Receptionist.Subscribe(WorldManager.Service, listingAdapter)
+      GlobalViewImpl(width, height)(frameRate).receive
+
+  private case class GlobalViewImpl(width: Int, height: Int)(frameRate: Double):
+    private var worldActor: Option[ActorRef[WorldMessage]] = Option.empty
+    private var world: Option[World] = Option.empty
+
+    val receive: Behavior[GlobalViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
+      Behaviors.withTimers: timers =>
+        timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
+        Behaviors.receiveMessagePartial:
+          case msg: Receptionist.Listing =>
+            //ctx.log.info(s"LISTING $msg ${msg.serviceInstances(World.Service).toList}")
+            if msg.serviceInstances(WorldManager.Service).toList.nonEmpty then
+              val service = msg.serviceInstances(WorldManager.Service).toList.head
+              if !worldActor.contains(service) then worldActor = Some(service)
+              ctx.log.info(s"NEW WORLD! ${worldActor.get}")
+            Behaviors.same
+          case RenderWorld(newWorld) =>
+            ctx.log.info(s"RENDER WORLD, world: $newWorld")
+            world = Some(newWorld)
+            update()
+            Behaviors.same
+          case Flush() =>
+            update()
+            Behaviors.same
+
+    private val panel = new FlowPanel:
+      override def paintComponent(g: Graphics2D): Unit =
+        super.paintComponent(g)
+        if world.nonEmpty then AgarViewUtils.drawWorld(g, world.get)
+
+    private val frame = new MainFrame:
+      title = "Agar.io - Global View"
+      preferredSize = new Dimension(width, height)
+      contents = panel
+    frame.open()
+
+    def update(): Unit = SwingUtilities.invokeLater(() => panel.repaint())

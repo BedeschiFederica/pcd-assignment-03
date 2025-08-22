@@ -6,7 +6,8 @@ import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass03.Message
 import pcd.ass03.model.FoodManager.FoodManagerMessage
 import pcd.ass03.model.WorldManager.WorldMessage
-import pcd.ass03.view.PlayerView
+import pcd.ass03.view.GlobalView.GlobalViewMessage
+import pcd.ass03.view.{GlobalView, PlayerView}
 import pcd.ass03.view.PlayerView.PlayerViewMessage
 
 import scala.util.Random
@@ -55,7 +56,7 @@ object PlayerActor:
         //ctx.log.info(s"PlayerView: $playerView")
         player = player.copy(pos = Position((player.pos.x + dx * Speed).max(0).min(width),
           (player.pos.y + dy * Speed).max(0).min(height)))
-        //ctx.log.info(s"move to $pos}, ${ctx.self.path}")
+        ctx.log.info(s"move to ${player.pos}, ${ctx.self.path}")
         if playerView.nonEmpty then playerView.get ! PlayerViewMessage.Render(player, ctx.self)
         Behaviors.same
       case Stop() => Behaviors.stopped
@@ -117,6 +118,7 @@ object WorldManager:
         context.system.receptionist ! Receptionist.Register(Service, context.self)
         val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter(listing => listing)
         context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
+        context.system.receptionist ! Receptionist.Subscribe(GlobalView.Service, listingAdapter)
         context.system.receptionist ! Receptionist.Subscribe(PlayerActor.Service, listingAdapter)
         context.system.receptionist ! Receptionist.Subscribe(FoodManager.Service, listingAdapter)
         Behaviors.withTimers: timers =>
@@ -127,6 +129,7 @@ object WorldManager:
     private var players: Seq[ActorRef[PlayerMessage]] = List.empty
     private var playerViews: Seq[ActorRef[PlayerViewMessage]] = List.empty
     private var foodManager: Option[ActorRef[FoodManagerMessage]] = Option.empty
+    private var globalView: Option[ActorRef[GlobalViewMessage]] = Option.empty
     private var counter = 0
     private var foodUpdated = false
 
@@ -137,6 +140,11 @@ object WorldManager:
             ctx.log.info(s"LISTING VIEWS: ${msg.serviceInstances(PlayerView.Service).toList}")
             val viewServices = msg.serviceInstances(PlayerView.Service).toList
             if viewServices != playerViews then playerViews = viewServices
+          case GlobalView.Service =>
+            if msg.serviceInstances(GlobalView.Service).toList.nonEmpty then
+              val globalViewService = msg.serviceInstances(GlobalView.Service).toList.head
+              if !globalView.contains(globalViewService) then globalView = Some(globalViewService)
+              ctx.log.info(s"GLOBAL VIEW: ${globalView.get}")
           case PlayerActor.Service =>
             ctx.log.info(s"LISTING PLAYERS: ${msg.serviceInstances(PlayerActor.Service).toList}")
             val playerServices = msg.serviceInstances(PlayerActor.Service).toList
@@ -157,7 +165,8 @@ object WorldManager:
           Behaviors.same
       case UpdateWorld() =>
         ctx.log.info(s"RECEIVED UPDATE WORLD, world: $world")
-        playerViews.foreach(_ ! RenderWorld(world))
+        playerViews.foreach(_ ! PlayerViewMessage.RenderWorld(world))
+        if globalView.nonEmpty then globalView.get ! GlobalViewMessage.RenderWorld(world)
         Behaviors.same
 
     private val waitingValues: Behavior[WorldMessage | Receptionist.Listing] =

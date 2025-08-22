@@ -21,8 +21,7 @@ object PlayerView:
   trait PlayerViewMessage extends Message
   object PlayerViewMessage:
     case class Render(player: Player, from: ActorRef[PlayerMessage]) extends PlayerViewMessage
-    case class RenderWorld(world: World)
-      extends PlayerViewMessage
+    case class RenderWorld(world: World) extends PlayerViewMessage
     case class Flush() extends PlayerViewMessage
     case class UpdatePlayer(dx: Double, dy: Double) extends PlayerViewMessage
 

@@ -5,7 +5,7 @@ import akka.actor.typed.Behavior
 import akka.cluster.*
 import akka.cluster.typed.Cluster
 import pcd.ass03.model.{FoodManager, PlayerActor, Position, WorldManager}
-import pcd.ass03.view.PlayerView
+import pcd.ass03.view.{GlobalView, PlayerView}
 import pcd.ass03.view.PlayerView.*
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -31,6 +31,7 @@ object Root:
     else
       ctx.spawnAnonymous(WorldManager(width, height))
       ctx.spawnAnonymous(FoodManager(width, height))
+      ctx.spawnAnonymous(GlobalView(width, height)())
     Behaviors.empty
 
 @main def mainTest(): Unit =
