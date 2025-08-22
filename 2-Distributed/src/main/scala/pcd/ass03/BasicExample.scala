@@ -22,13 +22,17 @@ object Root:
     if cluster.selfMember.hasRole(Roles.player) then
       given random: Random = Random()
       val (x, y) = (random.nextInt(300), random.nextInt(300))
-      ctx.spawn(PlayerView(), id)
-      ctx.spawnAnonymous(Player(id, Position(x, y), mass = 120))
+      val playerViewName =
+        PlayerView.getClass.getSimpleName.substring(0, PlayerView.getClass.getSimpleName.length - 1)
+      ctx.spawn(PlayerView(), s"$playerViewName$id")
+      val playerName =
+        Player.getClass.getSimpleName.substring(0, Player.getClass.getSimpleName.length - 1)
+      ctx.spawn(Player(id, Position(x, y), mass = 120), s"$playerName$id")
     else
       ctx.spawnAnonymous(World(400, 400))
     Behaviors.empty
 
 @main def mainTest(): Unit =
   startupWithRole(Roles.world, seeds.head)(Root("World"))
-  startupWithRole(Roles.player, seeds(1))(Root("Player1"))
-  startupWithRole(Roles.player, seeds(2))(Root("Player2"))
+  startupWithRole(Roles.player, seeds(1))(Root("1"))
+  startupWithRole(Roles.player, seeds(2))(Root("2"))

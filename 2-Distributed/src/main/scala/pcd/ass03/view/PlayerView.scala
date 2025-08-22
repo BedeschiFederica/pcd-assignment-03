@@ -21,7 +21,7 @@ object PlayerView:
   trait PlayerViewMessage extends Message
   object PlayerViewMessage:
     case class Render(pos: Position, radius: Double, id: ActorRef[PlayerMessage]) extends PlayerViewMessage
-    case class RenderAll(toRender: Map[ActorRef[PlayerMessage], (Position, Double)]) extends PlayerViewMessage
+    case class RenderAll(toRender: Map[String, (Position, Double)]) extends PlayerViewMessage
     case class Flush() extends PlayerViewMessage
     case class UpdatePlayer(dx: Double, dy: Double) extends PlayerViewMessage
 
@@ -45,7 +45,7 @@ object PlayerView:
     private val receive: Behavior[PlayerViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
       Behaviors.withTimers: timers =>
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
-        var toRender: Map[ActorRef[PlayerMessage], (Position, Double)] = Map.empty
+        var toRender: Map[String, (Position, Double)] = Map.empty
         Behaviors.receiveMessagePartial:
           case msg: Receptionist.Listing =>
             //ctx.log.info(s"LISTING $msg ${msg.serviceInstances(World.Service).toList}")
@@ -56,11 +56,12 @@ object PlayerView:
             Behaviors.same
           case Render(pos, radius, id) =>
             if playerActor.isEmpty then playerActor = Some(id)
-            //ctx.log.info(s"render.. $id: $pos")
-            toRender = toRender + (id -> (pos, radius))
+            ctx.log.info(s"RENDER PLAYER.. $id: $pos")
+            toRender = toRender + (id.path.name -> (pos, radius))
             update(toRender.values.toList)
             Behaviors.same
           case RenderAll(map) =>
+            ctx.log.info(s"RENDER ALL, map: $map")
             toRender = map
             update(toRender.values.toList)
             Behaviors.same
@@ -68,7 +69,7 @@ object PlayerView:
             update(toRender.values.toList)
             Behaviors.same
           case UpdatePlayer(dx, dy) =>
-            ctx.log.info("UPDATE PLAYER")
+            //ctx.log.info("UPDATE PLAYER")
             playerActor.get ! Move(dx, dy)
             // repaint() ?
             Behaviors.same
@@ -107,7 +108,7 @@ object PlayerView:
           val mousePos = e.point
           val dx = (mousePos.x - frame.size.width / 2) * 0.01
           val dy = (mousePos.y - frame.size.height / 2) * 0.01
-          context.pipeToSelf(Future.successful(Position(mousePos.x, mousePos.y), (dx, dy))):
+          context.pipeToSelf(Future.successful(dx, dy)):
             case Success(_) => UpdatePlayer(dx, dy)
             case _ => throw IllegalStateException("Future unsuccessful.")
         }
