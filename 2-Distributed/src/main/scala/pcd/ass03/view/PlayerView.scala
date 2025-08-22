@@ -4,8 +4,8 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass03.Message
-import pcd.ass03.model.World.WorldMessage
-import pcd.ass03.model.{Position, World}
+import pcd.ass03.model.WorldManager.WorldMessage
+import pcd.ass03.model.{Player, Position, World, WorldManager}
 
 import java.awt.Graphics2D
 import javax.swing.SwingUtilities
@@ -15,13 +15,13 @@ import scala.concurrent.duration.DurationInt
 import scala.util.Success
 
 object PlayerView:
-  import pcd.ass03.model.Player.PlayerMessage
+  import pcd.ass03.model.PlayerActor.PlayerMessage
   import PlayerMessage.*
 
   trait PlayerViewMessage extends Message
   object PlayerViewMessage:
-    case class Render(pos: Position, radius: Double, id: ActorRef[PlayerMessage]) extends PlayerViewMessage
-    case class RenderAll(players: Map[String, (Position, Double)], foods: Map[String, (Position, Double)])
+    case class Render(player: Player, from: ActorRef[PlayerMessage]) extends PlayerViewMessage
+    case class RenderWorld(world: World)
       extends PlayerViewMessage
     case class Flush() extends PlayerViewMessage
     case class UpdatePlayer(dx: Double, dy: Double) extends PlayerViewMessage
@@ -33,13 +33,13 @@ object PlayerView:
   def apply(frameRate: Double = 60): Behavior[PlayerViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
     ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
     val listingAdapter: ActorRef[Receptionist.Listing] = ctx.messageAdapter(listing => listing)
-    ctx.system.receptionist ! Receptionist.Subscribe(World.Service, listingAdapter)
+    ctx.system.receptionist ! Receptionist.Subscribe(WorldManager.Service, listingAdapter)
     PlayerViewImpl(frameRate).setup
 
   private case class PlayerViewImpl(frameRate: Double):
     private var playerActor: Option[ActorRef[PlayerMessage]] = Option.empty
     private var worldActor: Option[ActorRef[WorldMessage]] = Option.empty
-    private var toRender: (Map[String, (Position, Double)], Map[String, (Position, Double)]) = (Map.empty, Map.empty)
+    private var world: Option[World] = Option.empty
 
     val setup: Behavior[PlayerViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
       panel.addListener(ctx)
@@ -51,20 +51,23 @@ object PlayerView:
         Behaviors.receiveMessagePartial:
           case msg: Receptionist.Listing =>
             //ctx.log.info(s"LISTING $msg ${msg.serviceInstances(World.Service).toList}")
-            if msg.serviceInstances(World.Service).toList.nonEmpty then
-              val service = msg.serviceInstances(World.Service).toList.head
+            if msg.serviceInstances(WorldManager.Service).toList.nonEmpty then
+              val service = msg.serviceInstances(WorldManager.Service).toList.head
               if !worldActor.contains(service) then worldActor = Some(service)
               ctx.log.info(s"NEW WORLD! ${worldActor.get}")
             Behaviors.same
-          case Render(pos, radius, id) =>
-            if playerActor.isEmpty then playerActor = Some(id)
-            ctx.log.info(s"RENDER PLAYER.. $id: $pos")
-            toRender = toRender.copy(_1 = toRender._1 + (id.path.name -> (pos, radius)))
+          case Render(player, from) =>
+            if playerActor.isEmpty then playerActor = Some(from)
+            //ctx.log.info(s"RENDER PLAYER.. $id: $pos")
+            if world.isEmpty then
+              world = Some(World(400, 400, List(player), List.empty))
+            else
+              world = Some(world.get.updatePlayer(player))
             update()
             Behaviors.same
-          case RenderAll(players, foods) =>
-            ctx.log.info(s"RENDER ALL, players: $players, foods: $foods")
-            toRender = (players, foods)
+          case RenderWorld(newWorld) =>
+            ctx.log.info(s"RENDER WORLD, world: $newWorld")
+            world = Some(newWorld)
             update()
             Behaviors.same
           case Flush() =>
@@ -83,11 +86,12 @@ object PlayerView:
 
       override def paintComponent(g: Graphics2D): Unit =
         super.paintComponent(g)
-        if playerActor.nonEmpty then
-          val (offsetX, offsetY) = toRender._1.get(playerActor.get.path.name)
-            .map((pos, _) => (pos.x - size.width / 2.0, pos.y - size.height / 2.0))
+        if world.nonEmpty && playerActor.nonEmpty then
+          val playerOpt = world.get.players.find(_.id == playerActor.get.path.name)
+          val (offsetX, offsetY) = playerOpt
+            .map(p => (p.pos.x - size.width / 2.0, p.pos.y - size.height / 2.0))
             .getOrElse((0.0, 0.0))
-          AgarViewUtils.drawWorld(g, (toRender._1, toRender._2.values.toList), offsetX, offsetY)
+          AgarViewUtils.drawWorld(g, world.get, offsetX, offsetY)
 
     private val frame = new MainFrame:
       title = s"Agar.io - Local View"

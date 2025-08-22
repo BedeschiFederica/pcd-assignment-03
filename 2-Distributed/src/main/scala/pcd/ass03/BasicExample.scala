@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.*
 import akka.actor.typed.Behavior
 import akka.cluster.*
 import akka.cluster.typed.Cluster
-import pcd.ass03.model.{FoodManager, Player, Position, World}
+import pcd.ass03.model.{FoodManager, PlayerActor, Position, WorldManager}
 import pcd.ass03.view.PlayerView
 import pcd.ass03.view.PlayerView.*
 
@@ -25,11 +25,10 @@ object Root:
       val playerViewName =
         PlayerView.getClass.getSimpleName.dropRight(1)
       ctx.spawn(PlayerView(), s"$playerViewName$id")
-      val playerName =
-        Player.getClass.getSimpleName.dropRight(1)
-      ctx.spawn(Player(id, Position(x, y), mass = 120), s"$playerName$id")
+      val playerId = s"p$id"
+      ctx.spawn(PlayerActor(playerId, Position(x, y), mass = 120), playerId)
     else
-      ctx.spawnAnonymous(World(400, 400))
+      ctx.spawnAnonymous(WorldManager(400, 400))
       ctx.spawnAnonymous(FoodManager())
     Behaviors.empty
 
