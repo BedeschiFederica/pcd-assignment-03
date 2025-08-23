@@ -19,7 +19,6 @@ object PlayerActor:
   object PlayerMessage:
     case class Move(dx: Double, dy: Double) extends PlayerMessage
     case class Ask(from: ActorRef[WorldMessage]) extends PlayerMessage
-    case class Stop() extends PlayerMessage
     case class Grow(player: Player) extends PlayerMessage
     case class UpdatePos(pos: Position) extends PlayerMessage
 
@@ -43,7 +42,6 @@ object PlayerActor:
 
     val receive: Behavior[PlayerMessage | Receptionist.Listing] = Behaviors.receiveMessagePartial:
       case msg: Receptionist.Listing =>
-        //ctx.log.info(s"New frontend! $msg, ${}")
         val service = msg.serviceInstances(PlayerView.Service).toList
           .find(_.path.name == s"$playerViewName${player.id.drop(1)}")
         if service.nonEmpty && playerView != service then
@@ -51,15 +49,11 @@ object PlayerActor:
           playerView.get ! PlayerViewMessage.Render(player, ctx.self)
         Behaviors.same
       case Move(dx, dy) =>
-        //ctx.log.info(s"PlayerView: $playerView")
         player = player.copy(pos = Position((player.pos.x + dx * Speed).max(0).min(width),
           (player.pos.y + dy * Speed).max(0).min(height)))
-        ctx.log.info(s"move to ${player.pos}, ${ctx.self.path}")
         if playerView.nonEmpty then playerView.get ! PlayerViewMessage.Render(player, ctx.self)
         Behaviors.same
-      case Stop() => Behaviors.stopped
       case Ask(from) =>
-        ctx.log.info("RECEIVED ASK")
         from ! SendPlayer(player, ctx.self)
         Behaviors.same
       case UpdatePos(newPos) =>
@@ -67,7 +61,6 @@ object PlayerActor:
         Behaviors.same
       case Grow(newPlayer) =>
         player = newPlayer
-        ctx.log.info(s"GROW $player")
         Behaviors.same
 
 object EatingManager:
@@ -162,34 +155,41 @@ object WorldManager:
               ctx.log.info(s"FOOD MANAGER: ${eatingManager.get}")
         Behaviors.same
       case Tick() =>
-        ctx.log.info(s"TICK")
         if players.nonEmpty then
           players.foreach(_ ! PlayerMessage.Ask(ctx.self))
           waitingValues
         else
           Behaviors.same
       case UpdateWorld() =>
-        ctx.log.info(s"RECEIVED UPDATE WORLD, world: $world")
         if eatingManager.nonEmpty then eatingManager.get ! EatingManagerMessage.UpdateWorld(world, ctx.self)
         Behaviors.same
       case UpdatedWorld(newWorld) =>
         newWorld.findModifiedPlayers.foreach(player => player.findActorById ! Grow(player))
-        findEatenPlayersActor(newWorld).foreach(_ ! Stop())
+        findEatenPlayersView(newWorld).foreach(_ ! PlayerViewMessage.Stop())
         players = newWorld.findAlivePlayersActor
         world = newWorld
         playerViews.foreach(_ ! PlayerViewMessage.RenderWorld(world))
         if globalView.nonEmpty then globalView.get ! GlobalViewMessage.RenderWorld(world)
-        Behaviors.same
+        val winner = EndGameLogic.getGameWinner(world.players)
+        if winner.nonEmpty then
+          playerViews.foreach(_ ! PlayerViewMessage.EndGame(winner.get))
+          ctx.system.terminate()
+          Behaviors.stopped
+        else
+          Behaviors.same
 
     extension (player: Player)
       private def findActorById: ActorRef[PlayerMessage] = players.find(_.path.name == player.id).get
+      private def findViewById: ActorRef[PlayerViewMessage] =
+        val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
+        playerViews.find(_.path.name.drop(playerViewName.length) == player.id.drop(1)).get
 
     extension (newWorld: World)
       private def findModifiedPlayers: Seq[Player] = newWorld.players.filter(p => p != world.playerById(p.id))
       private def findAlivePlayersActor: Seq[ActorRef[PlayerMessage]] = newWorld.players.map(findActorById)
 
-    private def findEatenPlayersActor(newWorld: World): Seq[ActorRef[PlayerMessage]] =
-      world.players.filter(p => newWorld.playerById(p.id).isEmpty).map(findActorById)
+    private def findEatenPlayersView(newWorld: World): Seq[ActorRef[PlayerViewMessage]] =
+      world.players.filter(p => newWorld.playerById(p.id).isEmpty).map(findViewById)
 
     private val waitingValues: Behavior[WorldMessage | Receptionist.Listing] =
       Behaviors.withStash[WorldMessage | Receptionist.Listing](1000): stash =>

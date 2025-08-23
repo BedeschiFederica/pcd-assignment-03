@@ -22,6 +22,7 @@ object Root:
 
   def apply(id: String, period: FiniteDuration = 60 milliseconds): Behavior[Nothing] = Behaviors.setup: ctx =>
     val cluster = Cluster(ctx.system)
+    ctx.system.whenTerminated.onComplete { _ => Thread.sleep(5000); System.exit(0) } (using ctx.executionContext)
     if cluster.selfMember.hasRole(Roles.player) then
       val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
       ctx.spawn(PlayerView(width, height)(), s"$playerViewName$id")

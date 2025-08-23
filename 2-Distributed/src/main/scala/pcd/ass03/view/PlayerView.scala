@@ -24,6 +24,8 @@ object PlayerView:
     case class RenderWorld(world: World) extends PlayerViewMessage
     case class Flush() extends PlayerViewMessage
     case class UpdatePlayer(dx: Double, dy: Double) extends PlayerViewMessage
+    case class EndGame(winner: Player) extends PlayerViewMessage
+    case class Stop() extends PlayerViewMessage
 
   import PlayerViewMessage.*
   export AgarViewUtils.*
@@ -50,15 +52,12 @@ object PlayerView:
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
         Behaviors.receiveMessagePartial:
           case msg: Receptionist.Listing =>
-            //ctx.log.info(s"LISTING $msg ${msg.serviceInstances(World.Service).toList}")
             if msg.serviceInstances(WorldManager.Service).toList.nonEmpty then
               val service = msg.serviceInstances(WorldManager.Service).toList.head
               if !worldActor.contains(service) then worldActor = Some(service)
-              ctx.log.info(s"NEW WORLD! ${worldActor.get}")
             Behaviors.same
           case Render(player, from) =>
             if playerActor.isEmpty then playerActor = Some(from)
-            //ctx.log.info(s"RENDER PLAYER.. $id: $pos")
             if world.isEmpty then
               world = Some(World(width, height, List(player), List.empty))
             else
@@ -66,7 +65,6 @@ object PlayerView:
             update()
             Behaviors.same
           case RenderWorld(newWorld) =>
-            ctx.log.info(s"RENDER WORLD, world: $newWorld")
             world = Some(newWorld)
             update()
             Behaviors.same
@@ -74,10 +72,19 @@ object PlayerView:
             update()
             Behaviors.same
           case UpdatePlayer(dx, dy) =>
-            //ctx.log.info("UPDATE PLAYER")
-            playerActor.get ! Move(dx, dy)
-            // repaint() ?
+            if playerActor.nonEmpty then playerActor.get ! Move(dx, dy)
             Behaviors.same
+          case Stop() =>
+            frame.close()
+            ctx.system.terminate()
+            Behaviors.stopped
+          case EndGame(winner) =>
+            Dialog.showConfirmation(frame, s"The winner is Player ${winner.id.drop(1)}", "End game",
+              Dialog.Options.Default) match
+              case _ =>
+                frame.close()
+                ctx.system.terminate()
+            Behaviors.stopped
 
     private val panel = new FlowPanel:
       listenTo(keys, mouse.moves)

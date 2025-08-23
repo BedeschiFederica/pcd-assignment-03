@@ -35,18 +35,16 @@ object GlobalView:
     private var world: Option[World] = Option.empty
 
     val receive: Behavior[GlobalViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
+      ctx.system.whenTerminated.onComplete(_ => frame.close())(using ctx.executionContext)
       Behaviors.withTimers: timers =>
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
         Behaviors.receiveMessagePartial:
           case msg: Receptionist.Listing =>
-            //ctx.log.info(s"LISTING $msg ${msg.serviceInstances(World.Service).toList}")
             if msg.serviceInstances(WorldManager.Service).toList.nonEmpty then
               val service = msg.serviceInstances(WorldManager.Service).toList.head
               if !worldActor.contains(service) then worldActor = Some(service)
-              ctx.log.info(s"NEW WORLD! ${worldActor.get}")
             Behaviors.same
           case RenderWorld(newWorld) =>
-            ctx.log.info(s"RENDER WORLD, world: $newWorld")
             world = Some(newWorld)
             update()
             Behaviors.same
