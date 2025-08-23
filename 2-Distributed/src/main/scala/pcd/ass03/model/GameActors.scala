@@ -4,6 +4,9 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass03.Message
+import pcd.ass03.model.EatingManager.EndGameManager
+import pcd.ass03.model.EatingManager.EndGameManager.EndGameManagerMessage
+import pcd.ass03.model.EatingManager.EndGameManager.EndGameManagerMessage.CheckEndGame
 import pcd.ass03.model.WorldManager.WorldMessage
 import pcd.ass03.view.GlobalView.GlobalViewMessage
 import pcd.ass03.view.{GlobalView, PlayerView}
@@ -64,13 +67,11 @@ object PlayerActor:
         Behaviors.same
 
 object EatingManager:
-  import WorldManager.WorldMessage
-  import WorldMessage.UpdatedWorld
+  import WorldManager.WorldMessage.UpdatedWorld
 
   trait EatingManagerMessage extends Message
   object EatingManagerMessage:
     case class UpdateWorld(world: World, from: ActorRef[WorldMessage]) extends EatingManagerMessage
-    case class Stop() extends EatingManagerMessage
 
   import EatingManagerMessage.*
 
@@ -79,17 +80,30 @@ object EatingManager:
     Behaviors.setup:
       context =>
         context.system.receptionist ! Receptionist.Register(Service, context.self)
-        EatingManagerImpl(context).receive
+        Behaviors.receiveMessagePartial:
+          case UpdateWorld(newWorld, from) =>
+            from ! UpdatedWorld(EatingLogic.updateWorld(newWorld))
+            Behaviors.same
 
-  private case class EatingManagerImpl(ctx: ActorContext[EatingManagerMessage]):
-    private var world: Option[World] = Option.empty
+  object EndGameManager:
+    import WorldManager.WorldMessage.EndGame
 
-    val receive: Behavior[EatingManagerMessage] = Behaviors.receiveMessagePartial:
-      case UpdateWorld(newWorld, from) =>
-        world = Some(EatingLogic.updateWorld(newWorld))
-        from ! UpdatedWorld(world.get)
-        Behaviors.same
-      case Stop() => Behaviors.stopped
+    trait EndGameManagerMessage extends Message
+    object EndGameManagerMessage:
+      case class CheckEndGame(world: World, from: ActorRef[WorldMessage]) extends EndGameManagerMessage
+
+    import EndGameManagerMessage.*
+
+    val Service: ServiceKey[EndGameManagerMessage] = ServiceKey[EndGameManagerMessage]("EndGameManagerService")
+    def apply(): Behavior[EndGameManagerMessage] =
+      Behaviors.setup:
+        context =>
+          context.system.receptionist ! Receptionist.Register(Service, context.self)
+          Behaviors.receiveMessagePartial:
+            case CheckEndGame(world, from) =>
+              val winner = EndGameLogic.getGameWinner(world.players)
+              if winner.nonEmpty then from ! EndGame(winner.get)
+              Behaviors.same
 
 object WorldManager:
   import PlayerActor.PlayerMessage
@@ -105,6 +119,7 @@ object WorldManager:
     case class Tick() extends WorldMessage
     case class UpdateWorld() extends WorldMessage
     case class UpdatedWorld(world: World) extends WorldMessage
+    case class EndGame(winner: Player) extends WorldMessage
 
   import WorldMessage.*
 
@@ -118,6 +133,7 @@ object WorldManager:
         context.system.receptionist ! Receptionist.Subscribe(GlobalView.Service, listingAdapter)
         context.system.receptionist ! Receptionist.Subscribe(PlayerActor.Service, listingAdapter)
         context.system.receptionist ! Receptionist.Subscribe(EatingManager.Service, listingAdapter)
+        context.system.receptionist ! Receptionist.Subscribe(EndGameManager.Service, listingAdapter)
         Behaviors.withTimers: timers =>
             timers.startTimerAtFixedRate(Tick(), 60.milliseconds)
             WorldImpl(World(width, height, List.empty, initialFoods(30, width, height)), ctx = context).receive
@@ -129,6 +145,7 @@ object WorldManager:
     private var players: Seq[ActorRef[PlayerMessage]] = List.empty
     private var playerViews: Seq[ActorRef[PlayerViewMessage]] = List.empty
     private var eatingManager: Option[ActorRef[EatingManagerMessage]] = Option.empty
+    private var endGameManager: Option[ActorRef[EndGameManagerMessage]] = Option.empty
     private var globalView: Option[ActorRef[GlobalViewMessage]] = Option.empty
     private var counter = 0
 
@@ -153,6 +170,11 @@ object WorldManager:
               val foodManagerService = msg.serviceInstances(EatingManager.Service).toList.head
               if !eatingManager.contains(foodManagerService) then eatingManager = Some(foodManagerService)
               ctx.log.info(s"FOOD MANAGER: ${eatingManager.get}")
+          case EndGameManager.Service =>
+            if msg.serviceInstances(EndGameManager.Service).toList.nonEmpty then
+              val endGameManagerService = msg.serviceInstances(EndGameManager.Service).toList.head
+              if !endGameManager.contains(endGameManagerService) then endGameManager = Some(endGameManagerService)
+              ctx.log.info(s"END GAME MANAGER: ${endGameManager.get}")
         Behaviors.same
       case Tick() =>
         if players.nonEmpty then
@@ -170,13 +192,12 @@ object WorldManager:
         world = newWorld
         playerViews.foreach(_ ! PlayerViewMessage.RenderWorld(world))
         if globalView.nonEmpty then globalView.get ! GlobalViewMessage.RenderWorld(world)
-        val winner = EndGameLogic.getGameWinner(world.players)
-        if winner.nonEmpty then
-          playerViews.foreach(_ ! PlayerViewMessage.EndGame(winner.get))
-          ctx.system.terminate()
-          Behaviors.stopped
-        else
-          Behaviors.same
+        if endGameManager.nonEmpty then endGameManager.get ! EndGameManagerMessage.CheckEndGame(world, ctx.self)
+        Behaviors.same
+      case EndGame(winner) =>
+        playerViews.foreach(_ ! PlayerViewMessage.EndGame(winner))
+        ctx.system.terminate()
+        Behaviors.stopped
 
     extension (player: Player)
       private def findActorById: ActorRef[PlayerMessage] = players.find(_.path.name == player.id).get
