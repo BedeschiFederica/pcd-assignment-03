@@ -173,12 +173,23 @@ object WorldManager:
         if eatingManager.nonEmpty then eatingManager.get ! EatingManagerMessage.UpdateWorld(world, ctx.self)
         Behaviors.same
       case UpdatedWorld(newWorld) =>
-        newWorld.players.filter(p => p != world.playerById(p.id)).foreach: p =>
-          players.find(_.path.name == p.id).foreach(_ ! Grow(p))
+        newWorld.findModifiedPlayers.foreach(player => player.findActorById ! Grow(player))
+        findEatenPlayersActor(newWorld).foreach(_ ! Stop())
+        players = newWorld.findAlivePlayersActor
         world = newWorld
         playerViews.foreach(_ ! PlayerViewMessage.RenderWorld(world))
         if globalView.nonEmpty then globalView.get ! GlobalViewMessage.RenderWorld(world)
         Behaviors.same
+
+    extension (player: Player)
+      private def findActorById: ActorRef[PlayerMessage] = players.find(_.path.name == player.id).get
+
+    extension (newWorld: World)
+      private def findModifiedPlayers: Seq[Player] = newWorld.players.filter(p => p != world.playerById(p.id))
+      private def findAlivePlayersActor: Seq[ActorRef[PlayerMessage]] = newWorld.players.map(findActorById)
+
+    private def findEatenPlayersActor(newWorld: World): Seq[ActorRef[PlayerMessage]] =
+      world.players.filter(p => newWorld.playerById(p.id).isEmpty).map(findActorById)
 
     private val waitingValues: Behavior[WorldMessage | Receptionist.Listing] =
       Behaviors.withStash[WorldMessage | Receptionist.Listing](1000): stash =>
