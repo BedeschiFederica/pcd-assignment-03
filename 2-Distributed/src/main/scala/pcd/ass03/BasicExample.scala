@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.*
 import akka.actor.typed.Behavior
 import akka.cluster.*
 import akka.cluster.typed.Cluster
-import pcd.ass03.model.{FoodManager, PlayerActor, Position, WorldManager}
+import pcd.ass03.model.{EatingManager, PlayerActor, Position, WorldManager}
 import pcd.ass03.view.{GlobalView, PlayerView}
 import pcd.ass03.view.PlayerView.*
 
@@ -30,7 +30,7 @@ object Root:
         (width, height), playerId)
     else
       ctx.spawnAnonymous(WorldManager(width, height))
-      ctx.spawnAnonymous(FoodManager(width, height))
+      ctx.spawnAnonymous(EatingManager())
       ctx.spawnAnonymous(GlobalView(width, height)())
     Behaviors.empty
 
