@@ -3,7 +3,7 @@ package pcd.ass03
 import akka.actor.typed.scaladsl.*
 import akka.actor.typed.Behavior
 import akka.cluster.*
-import akka.cluster.typed.Cluster
+import akka.cluster.typed.{Cluster, ClusterSingleton, SingletonActor}
 import pcd.ass03.model.EatingManager.EndGameManager
 import pcd.ass03.model.{EatingManager, PlayerActor, Position, WorldManager}
 import pcd.ass03.view.{GlobalView, PlayerView}
@@ -26,10 +26,10 @@ object Root:
     ctx.system.whenTerminated.onComplete { _ => Thread.sleep(5000); System.exit(0) } (using ctx.executionContext)
     if cluster.selfMember.hasRole(Roles.player) then
       val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
-      ctx.spawn(PlayerView(width, height)(), s"$playerViewName$id")
-      val playerId = s"p$id"
+      val playerId = s"p${id.take(1)}"
+      ctx.spawn(PlayerView(width, height)(), s"$playerViewName${playerId.drop(1)}")
       ctx.spawn(PlayerActor(playerId, Position(Random.nextInt(width), Random.nextInt(height)), mass = 120)
-        (width, height), playerId)
+        (id.toLowerCase.contains("ai"))(width, height), playerId)
     else
       ctx.spawnAnonymous(WorldManager(width, height))
       ctx.spawnAnonymous(EatingManager())
@@ -40,7 +40,7 @@ object Root:
 @main def mainTest(): Unit =
   startupWithRole(Roles.world, seeds.head)(Root("World"))
   startupWithRole(Roles.player, seeds(1))(Root("1"))
-  startupWithRole(Roles.player, seeds(2))(Root("2"))
+  startupWithRole(Roles.player, seeds(2))(Root("2ai"))
 
 @main def addPlayer(): Unit =
   startupWithRole(Roles.player, seeds(3))(Root("3"))

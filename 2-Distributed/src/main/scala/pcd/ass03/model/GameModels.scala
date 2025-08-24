@@ -11,6 +11,9 @@ sealed trait Entity:
 
 case class Player(id: String, pos: Position, mass: Double) extends Entity:
   def grow(entity: Entity): Player = copy(mass = mass + entity.mass)
+  def updatePosition(dir: (Double, Double), size: (Int, Int)): Player =
+    val Speed = 10.0
+    copy(pos = Position((pos.x + dir._1 * Speed).max(0).min(size._1), (pos.y + dir._2 * Speed).max(0).min(size._2)))
 
 case class Food(id: String, pos: Position, mass: Double = 100.0) extends Entity
 

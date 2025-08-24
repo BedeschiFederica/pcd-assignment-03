@@ -10,61 +10,9 @@ import pcd.ass03.model.EatingManager.EndGameManager.EndGameManagerMessage.CheckE
 import pcd.ass03.model.WorldManager.WorldMessage
 import pcd.ass03.view.GlobalView.GlobalViewMessage
 import pcd.ass03.view.{GlobalView, PlayerView}
-import pcd.ass03.view.PlayerView.PlayerViewMessage
 
 import scala.util.Random
 import concurrent.duration.DurationInt
-
-object PlayerActor:
-  import WorldMessage.*
-
-  trait PlayerMessage extends Message
-  object PlayerMessage:
-    case class Move(dx: Double, dy: Double) extends PlayerMessage
-    case class Ask(from: ActorRef[WorldMessage]) extends PlayerMessage
-    case class Grow(player: Player) extends PlayerMessage
-    case class UpdatePos(pos: Position) extends PlayerMessage
-
-  import PlayerMessage.*
-
-  val Service: ServiceKey[PlayerMessage] = ServiceKey[PlayerMessage]("PlayerService")
-  def apply(id: String, pos: Position, mass: Double)
-           (width: Int, height: Int): Behavior[PlayerMessage | Receptionist.Listing] =
-    Behaviors.setup:
-      context =>
-        context.system.receptionist ! Receptionist.Register(Service, context.self)
-        val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter(listing => listing)
-        context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
-        PlayerImpl(Player(id, pos, mass), context)(width, height).receive
-
-  private case class PlayerImpl(private var player: Player, ctx: ActorContext[PlayerMessage | Receptionist.Listing])
-                               (width: Int, height: Int):
-    private val Speed = 10.0
-    private val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
-    private var playerView: Option[ActorRef[PlayerViewMessage]] = Option.empty
-
-    val receive: Behavior[PlayerMessage | Receptionist.Listing] = Behaviors.receiveMessagePartial:
-      case msg: Receptionist.Listing =>
-        val service = msg.serviceInstances(PlayerView.Service).toList
-          .find(_.path.name == s"$playerViewName${player.id.drop(1)}")
-        if service.nonEmpty && playerView != service then
-          playerView = service
-          playerView.get ! PlayerViewMessage.Render(player, ctx.self)
-        Behaviors.same
-      case Move(dx, dy) =>
-        player = player.copy(pos = Position((player.pos.x + dx * Speed).max(0).min(width),
-          (player.pos.y + dy * Speed).max(0).min(height)))
-        if playerView.nonEmpty then playerView.get ! PlayerViewMessage.Render(player, ctx.self)
-        Behaviors.same
-      case Ask(from) =>
-        from ! SendPlayer(player, ctx.self)
-        Behaviors.same
-      case UpdatePos(newPos) =>
-        player = player.copy(pos = newPos)
-        Behaviors.same
-      case Grow(newPlayer) =>
-        player = newPlayer
-        Behaviors.same
 
 object EatingManager:
   import WorldManager.WorldMessage.UpdatedWorld
@@ -178,7 +126,7 @@ object WorldManager:
         Behaviors.same
       case Tick() =>
         if players.nonEmpty then
-          players.foreach(_ ! PlayerMessage.Ask(ctx.self))
+          players.foreach(_ ! PlayerMessage.Ask(world, ctx.self))
           waitingValues
         else
           Behaviors.same
