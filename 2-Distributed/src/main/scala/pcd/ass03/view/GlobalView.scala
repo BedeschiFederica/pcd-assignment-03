@@ -1,8 +1,8 @@
 package pcd.ass03.view
 
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.{ActorRef, Behavior, PostStop}
 import pcd.ass03.Message
 import pcd.ass03.model.WorldManager.WorldMessage
 import pcd.ass03.model.{World, WorldManager}
@@ -38,7 +38,7 @@ object GlobalView:
       ctx.system.whenTerminated.onComplete(_ => frame.close())(using ctx.executionContext)
       Behaviors.withTimers: timers =>
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
-        Behaviors.receiveMessagePartial:
+        Behaviors.receiveMessagePartial[GlobalViewMessage | Receptionist.Listing]:
           case msg: Receptionist.Listing =>
             if msg.serviceInstances(WorldManager.Service).toList.nonEmpty then
               val service = msg.serviceInstances(WorldManager.Service).toList.head
@@ -51,6 +51,10 @@ object GlobalView:
           case Flush() =>
             update()
             Behaviors.same
+        .receiveSignal:
+          case (_, PostStop) =>
+            frame.close()
+            Behaviors.stopped
 
     private val panel = new FlowPanel:
       override def paintComponent(g: Graphics2D): Unit =

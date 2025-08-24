@@ -1,12 +1,11 @@
 package pcd.ass03
 
 import akka.actor.typed.scaladsl.*
-import akka.actor.typed.Behavior
+import akka.actor.typed.{Behavior, SupervisorStrategy}
 import akka.cluster.*
 import akka.cluster.typed.{Cluster, ClusterSingleton, SingletonActor}
-import pcd.ass03.model.EatingManager.EndGameManager
-import pcd.ass03.model.{EatingManager, PlayerActor, Position, WorldManager}
-import pcd.ass03.view.{GlobalView, PlayerView}
+import pcd.ass03.model.{PlayerActor, Position, WorldManager}
+import pcd.ass03.view.PlayerView
 import pcd.ass03.view.PlayerView.*
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -31,10 +30,12 @@ object Root:
       ctx.spawn(PlayerActor(playerId, Position(Random.nextInt(width), Random.nextInt(height)), mass = 120)
         (id.toLowerCase.contains("ai"))(width, height), playerId)
     else
-      ctx.spawnAnonymous(WorldManager(width, height))
-      ctx.spawnAnonymous(EatingManager())
-      ctx.spawnAnonymous(EndGameManager())
-      ctx.spawnAnonymous(GlobalView(width, height)())
+      ClusterSingleton(ctx.system).init(
+        SingletonActor(
+          Behaviors.supervise(WorldManager(width, height)).onFailure[Exception](SupervisorStrategy.restart),
+          "worldSingleton"
+        )//.withStopMessage(WorldManager.WorldMessage.Stop())
+      )
     Behaviors.empty
 
 @main def mainTest(): Unit =

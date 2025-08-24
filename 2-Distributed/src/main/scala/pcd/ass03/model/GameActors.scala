@@ -3,6 +3,9 @@ package pcd.ass03.model
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.cluster.ddata.typed.scaladsl.{DistributedData, Replicator}
+import akka.cluster.ddata.{LWWMap, LWWMapKey}
+import akka.cluster.ddata.typed.scaladsl.Replicator.{Get, GetResponse, ReadLocal, Update, UpdateResponse, WriteLocal}
 import pcd.ass03.Message
 import pcd.ass03.model.EatingManager.EndGameManager
 import pcd.ass03.model.EatingManager.EndGameManager.EndGameManagerMessage
@@ -24,14 +27,12 @@ object EatingManager:
   import EatingManagerMessage.*
 
   val Service: ServiceKey[EatingManagerMessage] = ServiceKey[EatingManagerMessage]("FoodManagerService")
-  def apply(): Behavior[EatingManagerMessage] =
-    Behaviors.setup:
-      context =>
-        context.system.receptionist ! Receptionist.Register(Service, context.self)
-        Behaviors.receiveMessagePartial:
-          case UpdateWorld(newWorld, from) =>
-            from ! UpdatedWorld(EatingLogic.updateWorld(newWorld))
-            Behaviors.same
+  def apply(): Behavior[EatingManagerMessage] = Behaviors.setup: context =>
+    context.system.receptionist ! Receptionist.Register(Service, context.self)
+    Behaviors.receiveMessagePartial:
+      case UpdateWorld(newWorld, from) =>
+        from ! UpdatedWorld(EatingLogic.updateWorld(newWorld))
+        Behaviors.same
 
   object EndGameManager:
     import WorldManager.WorldMessage.EndGame
@@ -43,15 +44,13 @@ object EatingManager:
     import EndGameManagerMessage.*
 
     val Service: ServiceKey[EndGameManagerMessage] = ServiceKey[EndGameManagerMessage]("EndGameManagerService")
-    def apply(): Behavior[EndGameManagerMessage] =
-      Behaviors.setup:
-        context =>
-          context.system.receptionist ! Receptionist.Register(Service, context.self)
-          Behaviors.receiveMessagePartial:
-            case CheckEndGame(world, from) =>
-              val winner = EndGameLogic.getGameWinner(world.players)
-              if winner.nonEmpty then from ! EndGame(winner.get)
-              Behaviors.same
+    def apply(): Behavior[EndGameManagerMessage] = Behaviors.setup: context =>
+      context.system.receptionist ! Receptionist.Register(Service, context.self)
+      Behaviors.receiveMessagePartial:
+        case CheckEndGame(world, from) =>
+          val winner = EndGameLogic.getGameWinner(world.players)
+          if winner.nonEmpty then from ! EndGame(winner.get)
+          Behaviors.same
 
 object WorldManager:
   import PlayerActor.PlayerMessage
@@ -68,36 +67,55 @@ object WorldManager:
     case class UpdateWorld() extends WorldMessage
     case class UpdatedWorld(world: World) extends WorldMessage
     case class EndGame(winner: Player) extends WorldMessage
+    case class InternalUpdateResponse(rsp: UpdateResponse[LWWMap[String, World]]) extends WorldMessage
+    case class InternalGetResponse(rsp: GetResponse[LWWMap[String, World]]) extends WorldMessage
 
   import WorldMessage.*
 
+  private val worldKey = "worldState"
+  private val DataKey: LWWMapKey[String, World] = LWWMapKey(worldKey)
   val Service: ServiceKey[WorldMessage] = ServiceKey[WorldMessage]("WorldService")
-  def apply(width: Int, height: Int): Behavior[WorldMessage | Receptionist.Listing] =
-    Behaviors.setup:
-      context =>
-        context.system.receptionist ! Receptionist.Register(Service, context.self)
-        val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter(listing => listing)
-        context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
-        context.system.receptionist ! Receptionist.Subscribe(GlobalView.Service, listingAdapter)
-        context.system.receptionist ! Receptionist.Subscribe(PlayerActor.Service, listingAdapter)
-        context.system.receptionist ! Receptionist.Subscribe(EatingManager.Service, listingAdapter)
-        context.system.receptionist ! Receptionist.Subscribe(EndGameManager.Service, listingAdapter)
-        Behaviors.withTimers: timers =>
-            timers.startTimerAtFixedRate(Tick(), 60.milliseconds)
-            WorldImpl(World(width, height, List.empty, initialFoods(30, width, height)), ctx = context).receive
+  def apply(width: Int, height: Int): Behavior[WorldMessage | Receptionist.Listing] = Behaviors.setup: context =>
+    context.spawnAnonymous(EatingManager())
+    context.spawnAnonymous(EndGameManager())
+    context.spawnAnonymous(GlobalView(width, height)())
+
+    val replicator = DistributedData(context.system).replicator
+    val getAdapter = context.messageAdapter(InternalGetResponse(_))
+    replicator ! Get(DataKey, ReadLocal, getAdapter)
+
+    context.system.receptionist ! Receptionist.Register(Service, context.self)
+    val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter(listing => listing)
+    context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
+    context.system.receptionist ! Receptionist.Subscribe(GlobalView.Service, listingAdapter)
+    context.system.receptionist ! Receptionist.Subscribe(PlayerActor.Service, listingAdapter)
+    context.system.receptionist ! Receptionist.Subscribe(EatingManager.Service, listingAdapter)
+    context.system.receptionist ! Receptionist.Subscribe(EndGameManager.Service, listingAdapter)
+
+    Behaviors.withTimers: timers =>
+      timers.startTimerAtFixedRate(Tick(), 60.milliseconds)
+      WorldImpl(World(width, height, List.empty, initialFoods(30, width, height)), context, replicator).receive
 
   private def initialFoods(numFoods: Int, width: Int, height: Int, initialMass: Double = 100.0): Seq[Food] =
     (1 to numFoods).map(i => Food(s"f$i", Position(Random.nextInt(width), Random.nextInt(height)), initialMass))
 
-  private case class WorldImpl(private var world: World, ctx: ActorContext[WorldMessage | Receptionist.Listing]):
+  private case class WorldImpl(private var world: World, ctx: ActorContext[WorldMessage | Receptionist.Listing],
+                               replicator: ActorRef[Replicator.Command]):
     private var players: Seq[ActorRef[PlayerMessage]] = List.empty
     private var playerViews: Seq[ActorRef[PlayerViewMessage]] = List.empty
     private var eatingManager: Option[ActorRef[EatingManagerMessage]] = Option.empty
     private var endGameManager: Option[ActorRef[EndGameManagerMessage]] = Option.empty
     private var globalView: Option[ActorRef[GlobalViewMessage]] = Option.empty
+    private val updateAdapter = ctx.messageAdapter(InternalUpdateResponse(_))
     private var counter = 0
 
     val receive: Behavior[WorldMessage | Receptionist.Listing] = Behaviors.receiveMessagePartial:
+      case InternalGetResponse(rsp) => rsp match
+        case Replicator.GetSuccess(`DataKey`) =>
+          val data: LWWMap[String, World] = rsp.asInstanceOf[Replicator.GetSuccess[LWWMap[String, World]]].get(DataKey)
+          if data.get(worldKey).nonEmpty then world = data.get(worldKey).get
+        case _ =>
+        Behaviors.same
       case msg: Receptionist.Listing =>
         msg.key match
           case PlayerView.Service =>
@@ -138,6 +156,8 @@ object WorldManager:
         findEatenPlayersView(newWorld).foreach(_ ! PlayerViewMessage.Stop())
         players = newWorld.findAlivePlayersActor
         world = newWorld
+        replicator ! Update(DataKey, LWWMap.empty[String, World], WriteLocal, updateAdapter): map =>
+          (map :+ (worldKey -> world))(using DistributedData(ctx.system).selfUniqueAddress)
         playerViews.foreach(_ ! PlayerViewMessage.RenderWorld(world))
         if globalView.nonEmpty then globalView.get ! GlobalViewMessage.RenderWorld(world)
         if endGameManager.nonEmpty then endGameManager.get ! EndGameManagerMessage.CheckEndGame(world, ctx.self)
