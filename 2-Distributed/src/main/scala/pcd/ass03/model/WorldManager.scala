@@ -17,7 +17,7 @@ import PlayerViewMessage.RenderWorld
 import pcd.ass03.model.EndGameManager.EndGameManagerMessage
 
 import scala.util.Random
-import concurrent.duration.DurationInt
+import concurrent.duration.{DurationInt, FiniteDuration}
 
 object WorldManager:
 
@@ -34,31 +34,31 @@ object WorldManager:
 
   import WorldMessage.*
 
+  private val InitialFoodMass = 100.0
+  private val FoodsNumber = 30
+
   private val WorldKey = "worldState"
   private val DataKey: LWWMapKey[String, World] = LWWMapKey(WorldKey)
   val Service: ServiceKey[WorldMessage] = ServiceKey[WorldMessage]("WorldService")
-  def apply(width: Int, height: Int): Behavior[WorldMessage | Receptionist.Listing] = Behaviors.setup: context =>
-    context.spawnAnonymous(EatingManager())
-    context.spawnAnonymous(EndGameManager())
-    context.spawnAnonymous(GlobalView(width, height)())
+  def apply(width: Int, height: Int)(frameRate: FiniteDuration) : Behavior[WorldMessage | Receptionist.Listing] =
+    Behaviors.setup: context =>
+      context.spawnAnonymous(EatingManager())
+      context.spawnAnonymous(EndGameManager())
+      context.spawnAnonymous(GlobalView(width, height)(frameRate))
 
-    val replicator = DistributedData(context.system).replicator
-    val getAdapter = context.messageAdapter(InternalGetResponse.apply)
-    replicator ! Get(DataKey, ReadLocal, getAdapter)
+      val replicator = DistributedData(context.system).replicator
+      replicator ! Get(DataKey, ReadLocal, context.messageAdapter(InternalGetResponse.apply))
 
-    context.system.receptionist ! Receptionist.Register(Service, context.self)
-    val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter(listing => listing)
-    context.system.receptionist ! Receptionist.Subscribe(PlayerView.Service, listingAdapter)
-    context.system.receptionist ! Receptionist.Subscribe(GlobalView.Service, listingAdapter)
-    context.system.receptionist ! Receptionist.Subscribe(PlayerActor.Service, listingAdapter)
-    context.system.receptionist ! Receptionist.Subscribe(EatingManager.Service, listingAdapter)
-    context.system.receptionist ! Receptionist.Subscribe(EndGameManager.Service, listingAdapter)
+      context.system.receptionist ! Receptionist.Register(Service, context.self)
+      Set(PlayerView.Service, GlobalView.Service, PlayerActor.Service, EatingManager.Service, EndGameManager.Service)
+        .foreach(context.system.receptionist ! Receptionist.Subscribe(_, context.messageAdapter(listing => listing)))
 
-    Behaviors.withTimers: timers =>
-      timers.startTimerAtFixedRate(Tick(), 60.milliseconds)
-      WorldImpl(World(width, height, List.empty, initialFoods(30, width, height)), context, replicator).receive
+      Behaviors.withTimers: timers =>
+        timers.startTimerAtFixedRate(Tick(), frameRate)
+        WorldImpl(World(width, height, List.empty, initialFoods(FoodsNumber, width, height)), context, replicator)
+          .receive
 
-  private def initialFoods(numFoods: Int, width: Int, height: Int, initialMass: Double = 100.0): Seq[Food] =
+  private def initialFoods(numFoods: Int, width: Int, height: Int, initialMass: Double = InitialFoodMass): Seq[Food] =
     (1 to numFoods).map(i => Food(s"f$i", Position(Random.nextInt(width), Random.nextInt(height)), initialMass))
 
   private case class WorldImpl(private var world: World, ctx: ActorContext[WorldMessage | Receptionist.Listing],

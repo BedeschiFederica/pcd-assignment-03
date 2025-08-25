@@ -11,7 +11,7 @@ import java.awt.Graphics2D
 import javax.swing.SwingUtilities
 import scala.concurrent.Future
 import scala.swing.*
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 import scala.util.Success
 
 object PlayerView:
@@ -31,14 +31,14 @@ object PlayerView:
   import AgarViewUtils.*
 
   val Service: ServiceKey[PlayerViewMessage] = ServiceKey[PlayerViewMessage]("RenderService")
-  def apply(width: Int, height: Int)(frameRate: Double = 60): Behavior[PlayerViewMessage | Receptionist.Listing] =
+  def apply(width: Int, height: Int)(frameRate: FiniteDuration): Behavior[PlayerViewMessage | Receptionist.Listing] =
     Behaviors.setup: ctx =>
       ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
       val listingAdapter: ActorRef[Receptionist.Listing] = ctx.messageAdapter(listing => listing)
       ctx.system.receptionist ! Receptionist.Subscribe(WorldManager.Service, listingAdapter)
       PlayerViewImpl(width, height)(frameRate).setup
 
-  private case class PlayerViewImpl(width: Int, height: Int)(frameRate: Double):
+  private case class PlayerViewImpl(width: Int, height: Int)(frameRate: FiniteDuration):
     private var playerActor: Option[ActorRef[PlayerMessage]] = Option.empty
     private var worldActor: Option[ActorRef[WorldMessage]] = Option.empty
     private var world: Option[World] = Option.empty
@@ -49,7 +49,7 @@ object PlayerView:
 
     private val receive: Behavior[PlayerViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
       Behaviors.withTimers: timers =>
-        timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
+        timers.startTimerAtFixedRate(Flush(), frameRate)
         Behaviors.receiveMessagePartial:
           case msg: Receptionist.Listing =>
             worldActor = Option(msg.serviceInstances(WorldManager.Service).toList).collect:
@@ -77,9 +77,9 @@ object PlayerView:
           case EndGame(winner) =>
             Dialog.showConfirmation(frame, s"The winner is Player ${winner.id.drop(1)}", "End game",
               Dialog.Options.Default) match
-              case _ =>
-                frame.close()
-                ctx.system.terminate()
+                case _ =>
+                  frame.close()
+                  ctx.system.terminate()
             Behaviors.stopped
 
     private val panel = new FlowPanel:

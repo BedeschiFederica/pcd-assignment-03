@@ -9,7 +9,7 @@ import WorldManager.WorldMessage
 
 import java.awt.Graphics2D
 import javax.swing.SwingUtilities
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.swing.*
 
 object GlobalView:
@@ -23,21 +23,21 @@ object GlobalView:
   import AgarViewUtils.*
 
   val Service: ServiceKey[GlobalViewMessage] = ServiceKey[GlobalViewMessage]("GlobalRenderService")
-  def apply(width: Int, height: Int)(frameRate: Double = 60): Behavior[GlobalViewMessage | Receptionist.Listing] =
+  def apply(width: Int, height: Int)(frameRate: FiniteDuration): Behavior[GlobalViewMessage | Receptionist.Listing] =
     Behaviors.setup: ctx =>
       ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
       val listingAdapter: ActorRef[Receptionist.Listing] = ctx.messageAdapter(listing => listing)
       ctx.system.receptionist ! Receptionist.Subscribe(WorldManager.Service, listingAdapter)
       GlobalViewImpl(width, height)(frameRate).receive
 
-  private case class GlobalViewImpl(width: Int, height: Int)(frameRate: Double):
+  private case class GlobalViewImpl(width: Int, height: Int)(frameRate: FiniteDuration):
     private var worldActor: Option[ActorRef[WorldMessage]] = Option.empty
     private var world: Option[World] = Option.empty
 
     val receive: Behavior[GlobalViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
       ctx.system.whenTerminated.onComplete(_ => frame.close())(using ctx.executionContext)
       Behaviors.withTimers: timers =>
-        timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
+        timers.startTimerAtFixedRate(Flush(), frameRate)
         Behaviors.receiveMessagePartial[GlobalViewMessage | Receptionist.Listing]:
           case msg: Receptionist.Listing =>
             worldActor = Option(msg.serviceInstances(WorldManager.Service).toList).collect:
