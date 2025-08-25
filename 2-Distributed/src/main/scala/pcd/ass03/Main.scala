@@ -41,7 +41,7 @@ object Root:
 @main def mainTest(): Unit =
   startupWithRole(Roles.world, seeds.head)(Root("World"))
   startupWithRole(Roles.player, seeds(1))(Root("1"))
-  startupWithRole(Roles.player, seeds(2))(Root("2ai"))
+  startupWithRole(Roles.player, seeds(2))(Root("2"))
 
 @main def addPlayer(): Unit =
   startupWithRole(Roles.player, seeds(3))(Root("3"))

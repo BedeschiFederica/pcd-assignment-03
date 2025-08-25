@@ -4,8 +4,8 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior, PostStop}
 import pcd.ass03.Message
-import pcd.ass03.model.WorldManager.WorldMessage
 import pcd.ass03.model.{World, WorldManager}
+import WorldManager.WorldMessage
 
 import java.awt.Graphics2D
 import javax.swing.SwingUtilities
@@ -20,7 +20,7 @@ object GlobalView:
     case class Flush() extends GlobalViewMessage
 
   import GlobalViewMessage.*
-  export AgarViewUtils.*
+  import AgarViewUtils.*
 
   val Service: ServiceKey[GlobalViewMessage] = ServiceKey[GlobalViewMessage]("GlobalRenderService")
   def apply(width: Int, height: Int)(frameRate: Double = 60): Behavior[GlobalViewMessage | Receptionist.Listing] =
@@ -40,9 +40,8 @@ object GlobalView:
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
         Behaviors.receiveMessagePartial[GlobalViewMessage | Receptionist.Listing]:
           case msg: Receptionist.Listing =>
-            if msg.serviceInstances(WorldManager.Service).toList.nonEmpty then
-              val service = msg.serviceInstances(WorldManager.Service).toList.head
-              if !worldActor.contains(service) then worldActor = Some(service)
+            worldActor = Option(msg.serviceInstances(WorldManager.Service).toList).collect:
+              case l if l.nonEmpty => l.head
             Behaviors.same
           case RenderWorld(newWorld) =>
             world = Some(newWorld)
@@ -59,7 +58,7 @@ object GlobalView:
     private val panel = new FlowPanel:
       override def paintComponent(g: Graphics2D): Unit =
         super.paintComponent(g)
-        if world.nonEmpty then AgarViewUtils.drawWorld(g, world.get)
+        world.foreach(drawWorld(g, _))
 
     private val frame = new MainFrame:
       title = "Agar.io - Global View"

@@ -16,7 +16,7 @@ import scala.util.Success
 
 object PlayerView:
   import pcd.ass03.model.PlayerActor.PlayerMessage
-  import PlayerMessage.*
+  import PlayerMessage.Move
 
   trait PlayerViewMessage extends Message
   object PlayerViewMessage:
@@ -28,7 +28,7 @@ object PlayerView:
     case class Stop() extends PlayerViewMessage
 
   import PlayerViewMessage.*
-  export AgarViewUtils.*
+  import AgarViewUtils.*
 
   val Service: ServiceKey[PlayerViewMessage] = ServiceKey[PlayerViewMessage]("RenderService")
   def apply(width: Int, height: Int)(frameRate: Double = 60): Behavior[PlayerViewMessage | Receptionist.Listing] =
@@ -52,16 +52,13 @@ object PlayerView:
         timers.startTimerAtFixedRate(Flush(), ((1 / frameRate) * 1000).toInt.milliseconds)
         Behaviors.receiveMessagePartial:
           case msg: Receptionist.Listing =>
-            if msg.serviceInstances(WorldManager.Service).toList.nonEmpty then
-              val service = msg.serviceInstances(WorldManager.Service).toList.head
-              if !worldActor.contains(service) then worldActor = Some(service)
+            worldActor = Option(msg.serviceInstances(WorldManager.Service).toList).collect:
+              case l if l.nonEmpty => l.head
             Behaviors.same
           case Render(player, from) =>
             if playerActor.isEmpty then playerActor = Some(from)
-            if world.isEmpty then
-              world = Some(World(width, height, List(player), List.empty))
-            else
-              world = Some(world.get.updatePlayer(player))
+            world = world.fold(Some(World(width, height, List(player), List.empty)))
+              (_ => Some(world.get.updatePlayer(player)))
             update()
             Behaviors.same
           case RenderWorld(newWorld) =>
@@ -72,11 +69,10 @@ object PlayerView:
             update()
             Behaviors.same
           case UpdatePlayer(dx, dy) =>
-            if playerActor.nonEmpty then playerActor.get ! Move(dx, dy)
+            playerActor.foreach(_ ! Move(dx, dy))
             Behaviors.same
           case Stop() =>
             frame.close()
-            ctx.system.terminate()
             Behaviors.stopped
           case EndGame(winner) =>
             Dialog.showConfirmation(frame, s"The winner is Player ${winner.id.drop(1)}", "End game",
@@ -98,7 +94,7 @@ object PlayerView:
           val (offsetX, offsetY) = playerOpt
             .map(p => (p.pos.x - size.width / 2.0, p.pos.y - size.height / 2.0))
             .getOrElse((0.0, 0.0))
-          AgarViewUtils.drawWorld(g, world.get, offsetX, offsetY)
+          drawWorld(g, world.get, offsetX, offsetY)
 
     private val frame = new MainFrame:
       title = s"Agar.io - Local View"

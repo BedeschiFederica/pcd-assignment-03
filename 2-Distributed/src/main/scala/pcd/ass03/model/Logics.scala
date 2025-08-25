@@ -6,9 +6,7 @@ object EatingLogic:
   def updateWorld(world: World): World =
     var newWorld = world
     world.players.map(_.id).foreach: id =>
-      newWorld.playerById(id) match
-        case Some(player) => newWorld = updateWorldAfterMovement(newWorld, player)
-        case None => // Player not found, ignore movement
+      newWorld.playerById(id).collect {case player => newWorld = updateWorldAfterMovement(newWorld, player)}
     newWorld
 
   private def updateWorldAfterMovement(world: World, player: Player): World =
