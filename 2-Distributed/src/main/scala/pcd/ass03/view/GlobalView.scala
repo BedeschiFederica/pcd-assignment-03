@@ -9,7 +9,7 @@ import WorldManager.WorldMessage
 
 import java.awt.Graphics2D
 import javax.swing.SwingUtilities
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 import scala.swing.*
 
 object GlobalView:

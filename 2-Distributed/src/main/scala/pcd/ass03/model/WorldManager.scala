@@ -17,7 +17,7 @@ import PlayerViewMessage.RenderWorld
 import pcd.ass03.model.EndGameManager.EndGameManagerMessage
 
 import scala.util.Random
-import concurrent.duration.{DurationInt, FiniteDuration}
+import concurrent.duration.FiniteDuration
 
 object WorldManager:
 
