@@ -7,7 +7,7 @@ import akka.cluster.typed.{Cluster, ClusterSingleton, SingletonActor}
 import pcd.ass03.model.{PlayerActor, Position, WorldManager}
 import pcd.ass03.view.PlayerView
 
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.duration.DurationInt
 import scala.language.postfixOps
 import scala.util.Random
 
