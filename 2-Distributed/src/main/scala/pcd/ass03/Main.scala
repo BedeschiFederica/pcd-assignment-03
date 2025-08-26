@@ -41,10 +41,12 @@ object Root:
         )
       Behaviors.empty
 
-@main def mainTest(): Unit =
-  val NumPlayers = 2
-  startupWithRole(Roles.world, seeds.head)(Root("World"))
-  (1 to NumPlayers).foreach(nPlayer => startupWithRole(Roles.player, seeds(nPlayer))(Root(nPlayer.toString)))
+val NumPlayers = 2
 
-@main def addPlayer(): Unit =
-  startupWithRole(Roles.player, seeds(3))(Root("3"))
+private def startPlayer(nPlayer: Int): Unit = startupWithRole(Roles.player, seeds(nPlayer))(Root(nPlayer.toString))
+
+@main def main(): Unit =
+  startupWithRole(Roles.world, seeds.head)(Root("World"))
+  (1 to NumPlayers).foreach(startPlayer)
+
+@main def addPlayer(): Unit = startPlayer(NumPlayers + 1)

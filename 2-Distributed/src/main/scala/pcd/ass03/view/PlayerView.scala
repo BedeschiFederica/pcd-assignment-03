@@ -72,14 +72,13 @@ object PlayerView:
             playerActor.foreach(_ ! Move(dx, dy))
             Behaviors.same
           case Stop() =>
-            frame.close()
+            showDialog("You lost") match {case _ => frame.close()}
             Behaviors.stopped
           case EndGame(winner) =>
-            Dialog.showConfirmation(frame, s"The winner is Player ${winner.id.drop(1)}", "End game",
-              Dialog.Options.Default) match
-                case _ =>
-                  frame.close()
-                  ctx.system.terminate()
+            showDialog(s"The winner is Player ${winner.id.drop(1)}") match
+              case _ =>
+                frame.close()
+                ctx.system.terminate()
             Behaviors.stopped
 
     private val panel = new FlowPanel:
@@ -114,3 +113,6 @@ object PlayerView:
         }
 
     def update(): Unit = SwingUtilities.invokeLater(() => panel.repaint())
+
+    private def showDialog(message: String): Dialog.Result.Value =
+      Dialog.showConfirmation(frame, message, "End game", Dialog.Options.Default)
