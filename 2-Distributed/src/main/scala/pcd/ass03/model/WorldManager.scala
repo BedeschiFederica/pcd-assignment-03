@@ -2,7 +2,7 @@ package pcd.ass03.model
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import akka.cluster.ddata.{LWWMap, LWWMapKey}
 import akka.cluster.ddata.typed.scaladsl.{DistributedData, Replicator}
 import Replicator.{Get, GetResponse, ReadLocal, Update, UpdateResponse, WriteLocal}
@@ -37,8 +37,8 @@ object WorldManager:
   private val InitialFoodMass = 100.0
   private val FoodsNumber = 30
 
-  private val WorldKey = "worldState"
-  private val DataKey: LWWMapKey[String, World] = LWWMapKey(WorldKey)
+  val WorldKey = "worldState"
+  val DataKey: LWWMapKey[String, World] = LWWMapKey(WorldKey)
   val Service: ServiceKey[WorldMessage] = ServiceKey[WorldMessage]("WorldService")
   def apply(width: Int, height: Int)(frameRate: FiniteDuration) : Behavior[WorldMessage | Receptionist.Listing] =
     Behaviors.setup: context =>
@@ -63,6 +63,7 @@ object WorldManager:
 
   private case class WorldImpl(private var world: World, ctx: ActorContext[WorldMessage | Receptionist.Listing],
                                replicator: ActorRef[Replicator.Command]):
+    private val StashBufferSize = 1000
     private var players: Seq[ActorRef[PlayerMessage]] = List.empty
     private var playerViews: Seq[ActorRef[PlayerViewMessage]] = List.empty
     private var eatingManager: Option[ActorRef[EatingManagerMessage]] = Option.empty
@@ -88,6 +89,7 @@ object WorldManager:
         Behaviors.same
       case Tick() =>
         if players.nonEmpty then
+          world = world.copy(players = List.empty)
           players.foreach(_ ! PlayerMessage.Ask(world, ctx.self))
           waitingValues
         else
@@ -137,19 +139,34 @@ object WorldManager:
         players = newWorld.findAlivePlayersActor
 
     private val waitingValues: Behavior[WorldMessage | Receptionist.Listing] =
-      val StashBufferSize = 1000
       Behaviors.withStash[WorldMessage | Receptionist.Listing](StashBufferSize): stash =>
         Behaviors.receiveMessagePartial:
           case SendPlayer(player, from) =>
             counter += 1
-            world = world.playerById(player.id).fold(world.copy(players = player +: world.players))
-              (_ => world.updatePlayer(player))
-            if counter == players.size then
-              counter = 0
-              stash.stash(UpdateWorld())
-              stash.unstashAll(receive)
-            else
-              waitingValues
-          case message =>
-            if stash.size < StashBufferSize - 1 then stash.stash(message)
-            Behaviors.same
+            world = world.copy(players = player +: world.players)
+            stash.unstashAfterReceivedAll()
+          case msg: Receptionist.Listing => msg.key match
+            case PlayerActor.Service =>
+              val playerServices = msg.serviceInstances(PlayerActor.Service).toList
+              if players != playerServices then
+                players = playerServices
+                stash.unstashAfterReceivedAll()
+              else
+                Behaviors.same
+            case _ => stash.stashIfNotFull(msg)
+          case message => stash.stashIfNotFull(message)
+
+    extension (stash: StashBuffer[WorldMessage | Receptionist.Listing])
+      private def unstashAfterReceivedAll(): Behavior[WorldMessage | Receptionist.Listing] =
+        if counter == players.size then
+          counter = 0
+          stash.stash(UpdateWorld())
+          stash.unstashAll(receive)
+        else
+          waitingValues
+
+      private def stashIfNotFull(
+                                  message: WorldMessage | Receptionist.Listing
+                                ): Behavior[WorldMessage | Receptionist.Listing] =
+        if stash.size < StashBufferSize - 1 then stash.stash(message)
+        Behaviors.same

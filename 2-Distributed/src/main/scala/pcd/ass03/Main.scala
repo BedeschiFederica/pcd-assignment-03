@@ -21,25 +21,28 @@ object Root:
   private val InitialPlayerMass = 120.0
   private val StandardFrameRate = 60 milliseconds
 
-  def apply(id: String): Behavior[Nothing] = Behaviors.setup:
-    ctx =>
-      val cluster = Cluster(ctx.system)
-      ctx.system.whenTerminated.onComplete { _ => Thread.sleep(5000); System.exit(0) } (using ctx.executionContext)
-      if cluster.selfMember.hasRole(Roles.player) then
-        val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
-        val playerId = s"p${id.take(1)}"
-        ctx.spawn(PlayerView(Width, Height)(StandardFrameRate), s"$playerViewName${playerId.drop(1)}")
-        ctx.spawn(PlayerActor(playerId, Position(Random.nextInt(Width), Random.nextInt(Height)), InitialPlayerMass)
-          (id.toLowerCase.contains("ai"))(Width, Height), playerId)
-      else
-        ClusterSingleton(ctx.system).init(
-          SingletonActor(
-            Behaviors.supervise(WorldManager(Width, Height)(StandardFrameRate))
-              .onFailure[Exception](SupervisorStrategy.restart),
-            "worldSingleton"
-          )
+  def apply(id: String): Behavior[Nothing] = Behaviors.setup: ctx =>
+    val cluster = Cluster(ctx.system)
+    ctx.system.whenTerminated.onComplete { _ => Thread.sleep(5000); System.exit(0) } (using ctx.executionContext)
+    if cluster.selfMember.hasRole(Roles.player) then
+      val playerId = s"p${id.take(1)}"
+      ctx.spawn(Behaviors.supervise(
+        PlayerActor(playerId, Position(Random.nextInt(Width), Random.nextInt(Height)), InitialPlayerMass)
+        (id.toLowerCase.contains("ai"))(Width, Height)
+      ).onFailure[Exception](SupervisorStrategy.restart), playerId)
+      val playerViewName = PlayerView.getClass.getSimpleName.dropRight(1)
+      ctx.spawn(Behaviors.supervise(
+        PlayerView(Width, Height)(StandardFrameRate)
+      ).onFailure[Exception](SupervisorStrategy.restart), s"$playerViewName${playerId.drop(1)}")
+    else
+      ClusterSingleton(ctx.system).init(
+        SingletonActor(
+          Behaviors.supervise(WorldManager(Width, Height)(StandardFrameRate))
+            .onFailure[Exception](SupervisorStrategy.restart),
+          "worldSingleton"
         )
-      Behaviors.empty
+      )
+    Behaviors.empty
 
 val NumPlayers = 2
 

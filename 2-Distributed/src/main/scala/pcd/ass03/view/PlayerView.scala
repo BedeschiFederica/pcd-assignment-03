@@ -2,7 +2,7 @@ package pcd.ass03.view
 
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.{ActorRef, Behavior, PreRestart}
 import pcd.ass03.Message
 import pcd.ass03.model.WorldManager.WorldMessage
 import pcd.ass03.model.{Player, World, WorldManager}
@@ -50,7 +50,7 @@ object PlayerView:
     private val receive: Behavior[PlayerViewMessage | Receptionist.Listing] = Behaviors.setup: ctx =>
       Behaviors.withTimers: timers =>
         timers.startTimerAtFixedRate(Flush(), frameRate)
-        Behaviors.receiveMessagePartial:
+        Behaviors.receiveMessagePartial[PlayerViewMessage | Receptionist.Listing]:
           case msg: Receptionist.Listing =>
             worldActor = Option(msg.serviceInstances(WorldManager.Service).toList).collect:
               case l if l.nonEmpty => l.head
@@ -79,6 +79,11 @@ object PlayerView:
               case _ =>
                 frame.close()
                 ctx.system.terminate()
+            Behaviors.stopped
+        .receiveSignal:
+          case (_, PreRestart) =>
+            frame.close()
+            playerActor.foreach(_ ! Move(0, 0))
             Behaviors.stopped
 
     private val panel = new FlowPanel:
