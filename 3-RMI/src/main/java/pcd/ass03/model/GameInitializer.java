@@ -10,17 +10,8 @@ public class GameInitializer {
 
     private GameInitializer() { }
 
-    public static List<Player> initialPlayers(final int numPlayers,final int width, final int height, final double initialMass) {
-        return IntStream.rangeClosed(1, numPlayers)
-            .mapToObj(i -> new Player("p" + i, random.nextInt(width), random.nextInt(height), initialMass))
-            .toList();
-    }
-
-    public static List<Player> initialPlayers(final int numPlayers, final int width, final int height) {
-        return initialPlayers(numPlayers, width, height, 120.0);
-    }
-
-    public static List<Food> initialFoods(final int numFoods, final int width, final int height, final double initialMass) {
+    public static List<Food> initialFoods(final int numFoods, final int width, final int height,
+                                          final double initialMass) {
         return IntStream.rangeClosed(1, numFoods)
                 .mapToObj(i -> new Food("f" + i, random.nextInt(width), random.nextInt(height), initialMass))
                 .toList();

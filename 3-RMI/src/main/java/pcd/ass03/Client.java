@@ -15,10 +15,6 @@ import java.util.TimerTask;
 public class Client {
 
 	private static final String MANAGER_NAME = "manager";
-    private static final Random random = new Random();
-    private static final int WORLD_WIDTH = 1000;
-    private static final int WORLD_HEIGHT = 1000;
-    private static final double INITIAL_MASS = 120.0;
     private static final long GAME_TICK_MS = 30; // Corresponds to ~33 FPS
 
     public static void main(String[] args) {
@@ -26,10 +22,7 @@ public class Client {
         try {
             Registry registry = LocateRegistry.getRegistry(host);
             GameStateManager gameManager = (GameStateManager) registry.lookup(MANAGER_NAME);
-            final String playerId = "p" + (gameManager.getWorld().getPlayers().size() + 1);
-            final Player player = new Player(playerId, random.nextInt(WORLD_WIDTH), random.nextInt(WORLD_HEIGHT),
-                    INITIAL_MASS);
-            gameManager.addPlayer(player);
+            final String playerId = gameManager.addPlayer();
             final LocalView localView = new LocalView(gameManager, playerId);
             SwingUtilities.invokeLater(() -> localView.setVisible(true));
 
