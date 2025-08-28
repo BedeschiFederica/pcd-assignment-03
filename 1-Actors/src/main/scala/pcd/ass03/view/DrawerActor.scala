@@ -15,7 +15,7 @@ final case class DrawBoids() extends DrawMessage
 final case class UpdatedFrameRate(rate: Int) extends DrawMessage
 
 object DrawerActor:
-  private val FrameRate = 200
+  private val FrameRate = 25
 
   private var boids: List[ActorRef[BoidMessage]] = List.empty
   private var boidsPosition: List[P2d] = List.empty
