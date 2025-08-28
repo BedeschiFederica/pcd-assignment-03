@@ -24,7 +24,6 @@ object WorldManager:
   trait WorldMessage extends Message
   object WorldMessage:
     case class SendPlayer(player: Player, from: ActorRef[PlayerMessage]) extends WorldMessage
-    case class SendWorld(world: World) extends WorldMessage
     case class Tick() extends WorldMessage
     case class UpdateWorld() extends WorldMessage
     case class UpdatedWorld(world: World) extends WorldMessage

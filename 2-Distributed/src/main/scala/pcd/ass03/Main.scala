@@ -1,5 +1,10 @@
 package pcd.ass03
 
+/**
+ * @author Bedeschi Federica   federica.bedeschi4@studio.unibo.it
+ * @author Pracucci Filippo    filippo.pracucci@studio.unibo.it
+ */
+
 import akka.actor.typed.scaladsl.*
 import akka.actor.typed.{Behavior, SupervisorStrategy}
 import akka.cluster.*

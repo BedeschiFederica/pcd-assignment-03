@@ -1,6 +1,6 @@
 package pcd.ass03.model
 
-import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import pcd.ass03.Message
@@ -17,7 +17,6 @@ object PlayerActor:
   trait PlayerMessage extends Message
   object PlayerMessage:
     case class Move(dx: Double, dy: Double) extends PlayerMessage
-    case class MoveAi() extends PlayerMessage
     case class Ask(world: World, from: ActorRef[WorldMessage]) extends PlayerMessage
     case class Grow(player: Player) extends PlayerMessage
     case class Stop() extends PlayerMessage
