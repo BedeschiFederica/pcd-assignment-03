@@ -1,8 +1,10 @@
 package pcd.ass03.model;
 
+import java.io.Serializable;
 import java.rmi.RemoteException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class DefaultGameStateManager implements GameStateManager {
     private static final double PLAYER_SPEED = 2.0;
@@ -30,6 +32,12 @@ public class DefaultGameStateManager implements GameStateManager {
     }
 
     @Override
+    public void addPlayer(final Player player) throws RemoteException {
+        this.world = new World(this.world.getWidth(), this.world.getHeight(),
+                Stream.concat(this.world.getPlayers().stream(), Stream.of(player)).toList(), this.world.getFoods());
+    }
+
+    @Override
     public void setPlayerDirection(final String playerId, final double dx, final double dy) throws RemoteException {
         // Ensure player exists before setting direction
         if (world.getPlayerById(playerId).isPresent()) {
@@ -47,8 +55,14 @@ public class DefaultGameStateManager implements GameStateManager {
             .map(player -> {
                 try {
                     Position direction = playerDirections.getOrDefault(player.getId(), Position.ZERO);
-                    final double newX = player.getX() + direction.x() * PLAYER_SPEED;
-                    final double newY = player.getY() + direction.y() * PLAYER_SPEED;
+                    double newX = player.getX() + direction.x() * PLAYER_SPEED;
+                    if (newX < 0 || newX > this.world.getWidth()) {
+                        newX = player.getX();
+                    }
+                    double newY = player.getY() + direction.y() * PLAYER_SPEED;
+                    if (newY < 0 || newY > this.world.getHeight()) {
+                        newY = player.getY();
+                    }
                     return player.moveTo(newX, newY);
                 } catch (RemoteException e) {
                     throw new RuntimeException(e);

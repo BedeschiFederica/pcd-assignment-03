@@ -1,35 +1,51 @@
 package pcd.ass03;
 
 import pcd.ass03.model.*;
+import pcd.ass03.view.GlobalView;
 
+import javax.swing.*;
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class GameManager {
 
     private static final int WORLD_WIDTH = 1000;
     private static final int WORLD_HEIGHT = 1000;
-    private static final int NUM_PLAYERS = 4; // p1, p2, p3, p4
     private static final int NUM_FOODS = 100;
     private static final long GAME_TICK_MS = 30; // Corresponds to ~33 FPS
 
     public static void main(String[] args) {
 
         try {
-            final List<Player> initialPlayers = GameInitializer.initialPlayers(NUM_PLAYERS, WORLD_WIDTH, WORLD_HEIGHT);
             final List<Food> initialFoods = GameInitializer.initialFoods(NUM_FOODS, WORLD_WIDTH, WORLD_HEIGHT);
-            final World initialWorld = new World(WORLD_WIDTH, WORLD_HEIGHT, initialPlayers, initialFoods);
+            final World initialWorld = new World(WORLD_WIDTH, WORLD_HEIGHT, new ArrayList<>(), initialFoods);
             final GameStateManager gameManager = new DefaultGameStateManager(initialWorld);
-            /*var count = new CounterImpl(0);
-            var countStub = (Counter) UnicastRemoteObject.exportObject(count, 0);
+            final var managerStub = (GameStateManager) UnicastRemoteObject.exportObject(gameManager, 0);
+
+            final GlobalView globalView = new GlobalView(managerStub);
+            SwingUtilities.invokeLater(() -> globalView.setVisible(true));
 
             var registry = LocateRegistry.getRegistry();
-            registry.rebind("countObj", countStub);
+            registry.rebind("manager", managerStub);
 
-            log("Count object registered.");*/
-
-
+            final Timer timer = new Timer(true); // Use daemon thread for timer
+            timer.scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+                    System.out.println("TICK");
+                    try {
+                        gameManager.tick();
+                    } catch (RemoteException e) {
+                        throw new RuntimeException(e);
+                    }
+                    SwingUtilities.invokeLater(globalView::repaintView);
+                }
+            }, 0, GAME_TICK_MS);
         } catch (Exception e) {
             log("Server exception: " + e.toString());
             e.printStackTrace();

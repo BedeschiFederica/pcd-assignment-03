@@ -1,9 +1,10 @@
 package pcd.ass03.model;
 
+import java.io.Serializable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-public interface Entity extends Remote {
+public interface Entity extends Serializable, Remote {
     String getId() throws RemoteException;
     double getMass() throws RemoteException;
     double getX() throws RemoteException;

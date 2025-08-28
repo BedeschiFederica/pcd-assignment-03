@@ -1,12 +1,13 @@
 package pcd.ass03.model;
 
+import java.io.Serializable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-public class World implements Remote {
+public class World implements Serializable, Remote {
     private final int width;
     private final int height;
     private final List<Player> players;
