@@ -59,7 +59,7 @@ object PlayerActor:
         if !ai then updateAndRenderPlayer((dx, dy))
         Behaviors.same
       case Ask(world, from) =>
-        if ai then updateAndRenderPlayer(AIMovement.moveAI(player.id, world))
+        if ai then updateAndRenderPlayer(AIMovement.moveAI(player, world))
         from ! SendPlayer(player, ctx.self)
         Behaviors.same
       case Grow(newPlayer) =>

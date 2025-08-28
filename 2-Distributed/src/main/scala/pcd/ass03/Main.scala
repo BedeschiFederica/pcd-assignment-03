@@ -49,12 +49,15 @@ object Root:
       )
     Behaviors.empty
 
-val NumPlayers = 2
+val NumPlayers = 3
 
-private def startPlayer(nPlayer: Int): Unit = startupWithRole(Roles.player, seeds(nPlayer))(Root(nPlayer.toString))
+private def startPlayer(nPlayer: Int, ai: Boolean = false): Unit =
+  startupWithRole(Roles.player, seeds(nPlayer))(Root(nPlayer.toString + (if ai then "ai" else "")))
 
 @main def main(): Unit =
   startupWithRole(Roles.world, seeds.head)(Root("World"))
-  (1 to NumPlayers).foreach(startPlayer)
+  (1 until NumPlayers).foreach(startPlayer(_))
+  startPlayer(NumPlayers, ai = true)
+
 
 @main def addPlayer(): Unit = startPlayer(NumPlayers + 1)
