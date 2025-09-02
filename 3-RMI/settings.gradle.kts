@@ -1,2 +1,2 @@
-rootProject.name = "pcd-assignment-2025-optional"
+rootProject.name = "pcd-assignment-03-RMI"
 

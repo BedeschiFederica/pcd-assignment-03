@@ -3,11 +3,11 @@ package pcd.ass03.model;
 import java.rmi.RemoteException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class DefaultGameStateManager implements GameStateManager {
     private static final double PLAYER_SPEED = 2.0;
-    private static final int MAX_FOOD_ITEMS = 150;
     private static final Random random = new Random();
     private World world;
     private final Map<String, Position> playerDirections;
@@ -33,7 +33,16 @@ public class DefaultGameStateManager implements GameStateManager {
 
     @Override
     public String addPlayer() throws RemoteException {
-        final String playerId = "p" + (this.world.getPlayers().size() + 1);
+        final List<Integer> playerNumbers = this.world.getPlayers().stream().map(p -> {
+            try {
+                return Integer.valueOf((String) p.getId().subSequence(1, p.getId().length()));
+            } catch (RemoteException e) {
+                throw new RuntimeException(e);
+            }
+        }).toList();
+        final int id =
+                IntStream.iterate(1, n -> n + 1).dropWhile(playerNumbers::contains).findFirst().getAsInt();
+        final String playerId = "p" + id;
         final Player player = new Player(playerId, random.nextInt(this.world.getWidth()),
                 random.nextInt(this.world.getWidth()), Player.DEFAULT_MASS);
         this.world = new World(this.world.getWidth(), this.world.getHeight(),

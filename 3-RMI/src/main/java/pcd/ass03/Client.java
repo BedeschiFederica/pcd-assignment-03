@@ -27,7 +27,7 @@ public class Client {
 
     public static void main(String[] args) {
         final boolean isAi = args.length > 0 && args[0].equals("ai");
-        final String host = (args.length < 2) ? null : args[1];   // null -> localhost
+        final String host = (args.length < 2) ? null : args[1];
         final Registry registry;
         try {
             registry = LocateRegistry.getRegistry(host);
@@ -42,38 +42,53 @@ public class Client {
         localView = new LocalView(gameManager, playerId);
         SwingUtilities.invokeLater(() -> localView.setVisible(true));
 
-        final Timer timer = new Timer(true); // Use daemon thread for timer
+        final Timer timer = new Timer(true);
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 try {
-                    if (gameManager.getWorld().getPlayerById(playerId).isEmpty()) {
-                        localView.dispose();
-                        timer.cancel();
-                    }
                     if (isAi) {
                         AIMovement.moveAI(playerId, gameManager);
                     }
                     SwingUtilities.invokeLater(localView::repaintView);
+                    if (gameManager.getWorld().getPlayerById(playerId).isEmpty()
+                            && winnerListener.getWinnerId().isEmpty()) {
+                        handleDefeat(timer);
+                    }
                 } catch (final RemoteException | RuntimeException e) {
-                    localView.dispose();
-                    timer.cancel();
-                    checkWinner(e);
+                    checkWinner(e, timer);
                 }
             }
         }, 0, GAME_TICK_MS);
     }
 
-    private static void checkWinner(final Exception e) {
+    private static void handleDefeat(final Timer timer) throws RemoteException {
+        timer.cancel();
+        SwingUtilities.invokeLater(() -> {
+            JOptionPane.showConfirmDialog(localView, "You lost", "End game",
+                    JOptionPane.DEFAULT_OPTION);
+            localView.dispose();
+        });
+        gameManager.removeListener(winnerListener);
+        UnicastRemoteObject.unexportObject(winnerListener, false);
+    }
+
+    private static void checkWinner(final Exception e, final Timer timer) {
+        timer.cancel();
         try {
             if (winnerListener.getWinnerId().isPresent()) {
-                System.out.println("WINNER: " + winnerListener.getWinnerId().get());
+                final String message = "The winner is " + winnerListener.getWinnerId().get();
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showConfirmDialog(localView, message, "End game", JOptionPane.DEFAULT_OPTION);
+                    localView.dispose();
+                });
             } else {
                 System.err.println("Client exception in game: " + e);
+                localView.dispose();
                 disconnectPlayer();
             }
             UnicastRemoteObject.unexportObject(winnerListener, false);
-        } catch (final RemoteException ex) {
+        } catch (final RemoteException | RuntimeException ex) {
             System.err.println("Client exception in checking winner: " + ex);
             ex.printStackTrace();
         }

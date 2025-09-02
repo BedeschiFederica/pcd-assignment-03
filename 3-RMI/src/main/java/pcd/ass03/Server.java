@@ -12,7 +12,7 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
 import java.util.Timer;
 
-public class GameManager {
+public class Server {
 
     private static final String MANAGER_NAME = "manager";
     private static final int WORLD_WIDTH = 1000;
@@ -36,39 +36,43 @@ public class GameManager {
             registry = LocateRegistry.getRegistry();
             registry.rebind(MANAGER_NAME, managerStub);
         } catch (RemoteException e) {
-            throw new RuntimeException(e);
+            System.err.println("Server exception in manager init: " + e);
+            e.printStackTrace();
         }
-
         SwingUtilities.invokeLater(() -> globalView.setVisible(true));
 
-        final Timer timer = new Timer(true); // Use daemon thread for timer
+        final Timer timer = new Timer(true);
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 try {
                     gameManager.tick();
                     SwingUtilities.invokeLater(globalView::repaintView);
-                    Optional<Player> winner = gameManager.getWinner();
-                    if (winner.isPresent()) {
-                        gameManager.getListeners().forEach(l -> {
-                            try {
-                                l.setWinner(winner.get().getId());
-                            } catch (RemoteException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
-                        System.out.println("THE WINNER IS: " + winner.get().getId());
-                        globalView.dispose();
-                        timer.cancel();
-                        registry.unbind(MANAGER_NAME);
-                        UnicastRemoteObject.unexportObject(gameManager, false);
-                    }
+                    checkWinner(timer);
                 } catch (final RemoteException | NotBoundException e) {
                     log("Server exception in game: " + e);
                     e.printStackTrace();
                 }
             }
         }, 0, GAME_TICK_MS);
+    }
+
+    private static void checkWinner(final Timer timer) throws RemoteException, NotBoundException {
+        Optional<Player> winner = gameManager.getWinner();
+        if (winner.isPresent()) {
+            final String winnerId = winner.get().getId();
+            for (final WinnerListener l: gameManager.getListeners()) {
+                l.setWinner(winnerId);
+            }
+            timer.cancel();
+            registry.unbind(MANAGER_NAME);
+            UnicastRemoteObject.unexportObject(gameManager, false);
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showConfirmDialog(globalView, "The winner is " + winnerId, "End game",
+                        JOptionPane.DEFAULT_OPTION);
+                globalView.dispose();
+            });
+        }
     }
 
     private static void log(String msg) {
