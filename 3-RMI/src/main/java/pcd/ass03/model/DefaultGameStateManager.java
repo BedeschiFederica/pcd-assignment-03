@@ -40,6 +40,14 @@ public class DefaultGameStateManager implements GameStateManager {
     }
 
     @Override
+    public void removePlayer(final String playerId) throws RemoteException {
+        final Optional<Player> player = world.getPlayerById(playerId);
+        if (player.isPresent()) {
+            this.world = world.removePlayers(List.of(player.get()));
+        }
+    }
+
+    @Override
     public void setPlayerDirection(final String playerId, final double dx, final double dy) throws RemoteException {
         // Ensure player exists before setting direction
         if (world.getPlayerById(playerId).isPresent()) {

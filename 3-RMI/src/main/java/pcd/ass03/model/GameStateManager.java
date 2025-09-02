@@ -6,7 +6,8 @@ import java.rmi.RemoteException;
 
 public interface GameStateManager extends Serializable, Remote {
     World getWorld() throws RemoteException;
-    void setPlayerDirection(final String playerId, final double dx, final double dy) throws RemoteException;
+    void setPlayerDirection(String playerId, double dx, double dy) throws RemoteException;
     void tick() throws RemoteException;
     String addPlayer() throws RemoteException;
+    void removePlayer(String playerId) throws RemoteException;
 }

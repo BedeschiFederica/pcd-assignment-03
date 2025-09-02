@@ -7,10 +7,8 @@ import javax.swing.*;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.Timer;
-import java.util.TimerTask;
 
 public class GameManager {
 
@@ -42,12 +40,13 @@ public class GameManager {
                     try {
                         gameManager.tick();
                     } catch (final RemoteException e) {
-                        throw new RuntimeException(e);
+                        log("Server exception in tick: " + e);
+                        e.printStackTrace();
                     }
                     SwingUtilities.invokeLater(globalView::repaintView);
                 }
             }, 0, GAME_TICK_MS);
-        } catch (final Exception e) {
+        } catch (final RemoteException e) {
             log("Server exception: " + e);
             e.printStackTrace();
         }
