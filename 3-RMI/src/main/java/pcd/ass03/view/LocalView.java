@@ -58,8 +58,9 @@ public class LocalView extends JFrame {
                         }
                         // Repainting is handled by the main game loop timer
                     }
-                } catch (RemoteException ex) {
-                    throw new RuntimeException(ex);
+                } catch (final RemoteException ex) {
+                    System.err.println("Local view exception: " + e);
+                    ex.printStackTrace();
                 }
             }
         });

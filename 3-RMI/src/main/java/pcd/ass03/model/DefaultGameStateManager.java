@@ -11,6 +11,7 @@ public class DefaultGameStateManager implements GameStateManager {
     private static final Random random = new Random();
     private World world;
     private final Map<String, Position> playerDirections;
+    private final List<WinnerListener> listeners;
 
     public DefaultGameStateManager(final World initialWorld) throws RemoteException {
         this.world = initialWorld;
@@ -22,6 +23,7 @@ public class DefaultGameStateManager implements GameStateManager {
                 throw new RuntimeException(e);
             }
         });
+        this.listeners = new ArrayList<>();
     }
 
     @Override
@@ -55,9 +57,37 @@ public class DefaultGameStateManager implements GameStateManager {
         }
     }
 
+    @Override
     public void tick() throws RemoteException {
         this.world = handleEating(moveAllPlayers(this.world));
         cleanupPlayerDirections();
+    }
+
+    @Override
+    public void addListener(final WinnerListener listener) throws RemoteException {
+        this.listeners.add(listener);
+    }
+
+    @Override
+    public void removeListener(final WinnerListener listener) throws RemoteException {
+        this.listeners.remove(listener);
+    }
+
+    @Override
+    public List<WinnerListener> getListeners() throws RemoteException {
+        return this.listeners;
+    }
+
+    @Override
+    public Optional<Player> getWinner() throws RemoteException {
+        final double MASS_TO_WIN = 1000;
+        return this.world.getPlayers().stream().filter(p -> {
+            try {
+                return p.getMass() > MASS_TO_WIN;
+            } catch (RemoteException e) {
+                throw new RuntimeException(e);
+            }
+        }).findAny();
     }
 
     private World moveAllPlayers(final World currentWorld) throws RemoteException {
