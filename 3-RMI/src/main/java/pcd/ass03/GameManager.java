@@ -14,10 +14,12 @@ import java.util.TimerTask;
 
 public class GameManager {
 
+    private static final String MANAGER_NAME = "manager";
     private static final int WORLD_WIDTH = 1000;
     private static final int WORLD_HEIGHT = 1000;
     private static final int NUM_FOODS = 100;
     private static final long GAME_TICK_MS = 30; // Corresponds to ~33 FPS
+    private static final int PORT = 0;
 
     public static void main(String[] args) {
 
@@ -25,29 +27,28 @@ public class GameManager {
             final List<Food> initialFoods = GameInitializer.initialFoods(NUM_FOODS, WORLD_WIDTH, WORLD_HEIGHT);
             final World initialWorld = new World(WORLD_WIDTH, WORLD_HEIGHT, new ArrayList<>(), initialFoods);
             final GameStateManager gameManager = new DefaultGameStateManager(initialWorld);
-            final var managerStub = (GameStateManager) UnicastRemoteObject.exportObject(gameManager, 0);
+            final var managerStub = (GameStateManager) UnicastRemoteObject.exportObject(gameManager, PORT);
 
             final GlobalView globalView = new GlobalView(managerStub);
             SwingUtilities.invokeLater(() -> globalView.setVisible(true));
 
             var registry = LocateRegistry.getRegistry();
-            registry.rebind("manager", managerStub);
+            registry.rebind(MANAGER_NAME, managerStub);
 
             final Timer timer = new Timer(true); // Use daemon thread for timer
             timer.scheduleAtFixedRate(new TimerTask() {
                 @Override
                 public void run() {
-                    System.out.println("TICK");
                     try {
                         gameManager.tick();
-                    } catch (RemoteException e) {
+                    } catch (final RemoteException e) {
                         throw new RuntimeException(e);
                     }
                     SwingUtilities.invokeLater(globalView::repaintView);
                 }
             }, 0, GAME_TICK_MS);
-        } catch (Exception e) {
-            log("Server exception: " + e.toString());
+        } catch (final Exception e) {
+            log("Server exception: " + e);
             e.printStackTrace();
         }
     }
