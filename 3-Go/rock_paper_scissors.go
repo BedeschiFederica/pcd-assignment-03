@@ -1,5 +1,10 @@
 package main
 
+/*
+ * @author Bedeschi Federica   federica.bedeschi4@studio.unibo.it
+ * @author Pracucci Filippo    filippo.pracucci@studio.unibo.it
+ */
+
 import (
 	"fmt"
 	"math/rand"
