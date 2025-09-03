@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-//type Ball struct{ move Move }
-
 type Move int
 
 const (
@@ -53,27 +51,27 @@ func main() {
 	moveChannel2 := make(chan Move)
 	resultChannel1 := make(chan Result)
 	resultChannel2 := make(chan Result)
-	go referee("referee", moveChannel1, moveChannel2, resultChannel1, resultChannel2)
-	go player("p1", moveChannel1, resultChannel1)
-	go player("p2", moveChannel2, resultChannel2)
+	go referee(moveChannel1, moveChannel2, resultChannel1, resultChannel2)
+	go player(1, moveChannel1, resultChannel1)
+	go player(2, moveChannel2, resultChannel2)
 
 	for {
 	}
 }
 
-func referee(name string, moveChannel1 chan Move, moveChannel2 chan Move, resultChannel1 chan Result,
+func referee(moveChannel1 chan Move, moveChannel2 chan Move, resultChannel1 chan Result,
 	resultChannel2 chan Result) {
 	for {
 		moveP1, moveP2 := <-moveChannel1, <-moveChannel2
-		//fmt.Println(name, moveName[moveP1], moveName[moveP2])
 		resultChannel1 <- result[[2]Move{moveP1, moveP2}]
 		resultChannel2 <- result[[2]Move{moveP2, moveP1}]
 		time.Sleep(1 * time.Second)
+		fmt.Println()
 	}
 }
 
-func player(name string, moveChannel chan Move, resultChannel chan Result) {
-	var score = 0
+func player(id uint, moveChannel chan Move, resultChannel chan Result) {
+	score := 0
 	for {
 		move := Move(rand.Intn(3))
 		moveChannel <- move
@@ -81,7 +79,6 @@ func player(name string, moveChannel chan Move, resultChannel chan Result) {
 		if result == Win {
 			score++
 		}
-		fmt.Println(name, moveName[move], resultName[result])
-		fmt.Println(name, score)
+		fmt.Printf("Player %d: %-8s => %-4s \tScore = %d\n", id, moveName[move], resultName[result], score)
 	}
 }
